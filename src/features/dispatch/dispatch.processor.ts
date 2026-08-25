@@ -2,7 +2,7 @@ import { Processor, WorkerHost, InjectQueue } from '@nestjs/bullmq';
 import { Job, Queue, UnrecoverableError } from 'bullmq';
 import { Logger } from '@nestjs/common';
 import { DispatchService } from './dispatch.service';
-import { OrdersService } from '../orders/orders.service';
+import { OrdersStateService } from '../orders/orders-state.service';
 import { OrdersRepository } from '../orders/orders.repository';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
@@ -21,7 +21,7 @@ export class DispatchProcessor extends WorkerHost {
 
   constructor(
     private readonly dispatchService: DispatchService,
-    private readonly ordersService: OrdersService,
+    private readonly stateService: OrdersStateService,
     private readonly ordersRepository: OrdersRepository,
     private readonly platformSettings: PlatformSettingsService,
     private readonly prisma: PrismaService,
@@ -119,6 +119,32 @@ export class DispatchProcessor extends WorkerHost {
       }
     }
 
+    const settings = await this.platformSettings.getSettings();
+    const maxAttempts = settings.driverSearchMaxAttempts ?? 5;
+
+    if (attempt > maxAttempts) {
+      this.logger.error(
+        `Order ${orderNumber} exhausted ${maxAttempts} dispatch attempts — no drivers accepted`,
+      );
+
+      const order = await this.prisma.order.findUnique({
+        where: { id: orderId },
+        include: {
+          customer: true,
+          vendor: { include: { members: true } },
+          driver: true,
+        },
+      });
+
+      await this.stateService.cancelOrder(
+        null, // system actor
+        orderId,
+        'Auto-cancelled: No drivers accepted the order after maximum attempts',
+      );
+
+      return { noDriversFound: true, attempts: attempt, autoCancelled: true };
+    }
+
     let dispatched = false;
     try {
       dispatched = await this.dispatchService.attemptDispatch({
@@ -136,32 +162,6 @@ export class DispatchProcessor extends WorkerHost {
       this.logger.warn(
         `No drivers available for ${orderNumber} (attempt ${attempt})`,
       );
-
-      const settings = await this.platformSettings.getSettings();
-      const maxAttempts = settings.driverSearchMaxAttempts ?? 5;
-
-      if (attempt >= maxAttempts) {
-        this.logger.error(
-          `Order ${orderNumber} exhausted ${attempt} dispatch attempts — no drivers found`,
-        );
-
-        const order = await this.prisma.order.findUnique({
-          where: { id: orderId },
-          include: {
-            customer: true,
-            vendor: { include: { members: true } },
-            driver: true,
-          },
-        });
-
-        await this.ordersService.cancelOrder(
-          null, // system actor
-          orderId,
-          'Auto-cancelled: No drivers available after maximum attempts',
-        );
-
-        return { noDriversFound: true, attempts: attempt, autoCancelled: true };
-      }
 
       // Enqueue next attempt manually to ensure 'attempt' increments, triggering dynamic radius expansion
       await this.queue.add(

@@ -63,8 +63,11 @@ export class StorageService {
   async ensureDir(dir: string): Promise<void> {
     try {
       await fs.promises.mkdir(dir, { recursive: true });
-    } catch (error: any) {
-      if (error.code !== 'EEXIST') throw error;
+    } catch (error: unknown) {
+      if (typeof error === 'object' && error !== null && 'code' in error && (error as Record<string, unknown>).code === 'EEXIST') {
+        return;
+      }
+      throw error;
     }
   }
 }

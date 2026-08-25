@@ -77,7 +77,7 @@ export class StatisticsService {
     // If NOT contracted: customer pays commission as a service fee, so the vendor receives the full subtotal.
     const commission = Math.round(subtotal * (commissionRate / 100));
 
-    const vendorRevenue = isContracted ? subtotal - commission : subtotal;
+    const vendorRevenue = subtotal;
 
     // Recalculate driver delivery fee based on tier
     // Customer paid based on Gold tier. We subtract the difference if the driver is not Gold.
@@ -104,27 +104,25 @@ export class StatisticsService {
 
     // Sequentially process driver and vendor wallets to prevent DB row deadlocks
     const platformRevenue = commission + applicationDeliveryCut;
-    if (paymentMethod === 'CASH_ON_DELIVERY') {
+    const isDriverCollected = paymentMethod === 'CASH_ON_DELIVERY' || paymentMethod === 'MOBILE_WALLET';
+    
+    if (isDriverCollected) {
       await this.creditDriverWallet(
         driverId,
         -grandTotal,
         orderId,
         driverShiftId,
-        `Collected cash for order ${orderNumber}`,
+        `Collected payment (COD/Mobile Wallet) for order ${orderNumber}`,
         'CASH_COLLECTED',
       );
     }
 
     await this.creditDriverWallet(
       driverId,
-      paymentMethod === 'CASH_ON_DELIVERY'
-        ? driverEarnings + discount
-        : driverEarnings,
+      driverEarnings,
       orderId,
       driverShiftId,
-      paymentMethod === 'CASH_ON_DELIVERY' && discount > 0
-        ? `Delivery fee + discount compensation for order ${orderNumber}`
-        : `Delivery fee for order ${orderNumber}`,
+      `Delivery fee for order ${orderNumber}`,
       'DELIVERY_FEE',
     );
 
@@ -157,7 +155,7 @@ export class StatisticsService {
     });
 
     const isNegativeBalance = (driverSnapshot?.walletBalance ?? 0) < -((settings as any).maxNegativeDriverBalance ?? 500);
-    const isCashLock = paymentMethod === 'CASH_ON_DELIVERY' && !isContracted;
+    const isCashLock = isDriverCollected && !isContracted;
     const shouldLock = isCashLock || isNegativeBalance;
 
     const driver = await this.prisma.driver.update({
@@ -171,7 +169,7 @@ export class StatisticsService {
     });
 
     if (shouldLock) {
-      this.logger.warn(`Driver ${driverId} locked out due to unpaid commission on COD order ${orderNumber}.`);
+      this.logger.warn(`Driver ${driverId} locked out due to unpaid commission on driver-collected order ${orderNumber}.`);
       
       this.socketService.disconnectUser(driver.userId);
 

@@ -299,6 +299,13 @@ export class UpdatePlatformSettingsDto {
   @Type(() => Number)
   autoCancelPendingMins?: number;
 
+  @ApiProperty({ example: 15, required: false })
+  @IsInt()
+  @IsPositive()
+  @IsOptional()
+  @Type(() => Number)
+  mobileWalletTimeoutMins?: number;
+
   @ApiProperty({ example: 60, required: false })
   @IsInt()
   @IsPositive()

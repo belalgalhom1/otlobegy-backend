@@ -53,6 +53,7 @@ model PlatformSetting {
   driverSearchRadiusStepKm              Float     @default(2.0)
   driverSearchRadiusMaxKm               Float     @default(15.0)
   autoCancelPendingMins                 Int       @default(15)
+  mobileWalletTimeoutMins               Int       @default(15)
   driverAcceptTimeoutSecs               Int       @default(30)
   isMaintenanceMode                     Boolean   @default(false)
   androidMinVersion                     String    @default("1.0.0")

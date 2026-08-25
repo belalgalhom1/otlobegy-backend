@@ -128,6 +128,9 @@ export class PlatformSetting {
   autoCancelPendingMins: number = 15;
 
   @ApiProperty({ type: Number })
+  mobileWalletTimeoutMins: number = 15;
+
+  @ApiProperty({ type: Number })
   driverAcceptTimeoutSecs: number = 30;
 
   @ApiProperty({ type: Boolean })

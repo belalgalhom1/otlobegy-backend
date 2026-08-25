@@ -1,7 +1,7 @@
 import { Processor, WorkerHost, InjectQueue } from '@nestjs/bullmq';
 import { Job, Queue, UnrecoverableError } from 'bullmq';
 import { Logger, OnModuleInit } from '@nestjs/common';
-import { OrdersService } from './orders.service';
+import { OrdersStateService } from './orders-state.service';
 import { StatisticsService } from '../statistics/statistics.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { OrdersRepository } from './orders.repository';
@@ -19,7 +19,7 @@ export class OrdersProcessor extends WorkerHost implements OnModuleInit {
   private readonly logger = new Logger(OrdersProcessor.name);
 
   constructor(
-    private readonly ordersService: OrdersService,
+    private readonly stateService: OrdersStateService,
     private readonly ordersRepository: OrdersRepository,
     private readonly statisticsService: StatisticsService,
     private readonly platformSettings: PlatformSettingsService,
@@ -254,7 +254,7 @@ export class OrdersProcessor extends WorkerHost implements OnModuleInit {
       if (staleOrders.length === 0) return;
 
       const cancelPromises = staleOrders.map((order) =>
-        this.ordersService.cancelOrder(
+        this.stateService.cancelOrder(
           null, // system actor
           order.id,
           `Auto-cancelled: pending for more than ${settings.autoCancelPendingMins} minutes`,
@@ -403,6 +403,35 @@ export class OrdersProcessor extends WorkerHost implements OnModuleInit {
       recovered++;
     }
 
+    const settings = await this.platformSettings.getSettings();
+
+    // Find orders stuck in PENDING_PAYMENT for more than configured minutes (Customer didn't pay via Mobile Wallet)
+    const paymentCutoff = new Date(Date.now() - settings.mobileWalletTimeoutMins * 60 * 1000);
+    const stuckPaymentOrders = await this.prisma.order.findMany({
+      where: {
+        status: OrderStatus.PENDING_PAYMENT,
+        updatedAt: { lt: paymentCutoff },
+      },
+      select: { id: true, orderNumber: true },
+      take: 100,
+    });
+
+    if (stuckPaymentOrders.length > 0) {
+      this.logger.warn(`Found ${stuckPaymentOrders.length} stuck PENDING_PAYMENT orders. Auto-cancelling to free drivers...`);
+      for (const order of stuckPaymentOrders) {
+        try {
+          await this.stateService.cancelOrder(
+            null, // system actor
+            order.id,
+            'Auto-cancelled: Customer did not complete mobile wallet payment in time.'
+          );
+          recovered++;
+        } catch (err) {
+          this.logger.error(`Failed to auto-cancel stuck payment order ${order.orderNumber}`, (err as Error).stack);
+        }
+      }
+    }
+
     return { recovered };
   }
 
@@ -455,7 +484,7 @@ export class OrdersProcessor extends WorkerHost implements OnModuleInit {
     if (!order || order.status !== 'PENDING_CUSTOMER_APPROVAL') return { skipped: true };
 
     // 1. Cancel the order (pass null for system actor, and orderId as second argument)
-    await this.ordersService.cancelOrder(
+    await this.stateService.cancelOrder(
       null,
       orderId,
       'Customer did not approve the final fee in time.'

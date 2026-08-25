@@ -179,6 +179,7 @@ export class PlatformSettingsService {
       'fallbackOrderDistanceKm',
       'customOrderPlatformFee',
       'autoCancelPendingMins',
+      'mobileWalletTimeoutMins',
       'driverAcceptTimeoutSecs',
       'isMaintenanceMode',
       'androidMinVersion',

@@ -53,6 +53,12 @@ type CartItemInclude = {
     stock: number | null;
     imageUrl: string | null;
     hasVariants: boolean;
+    offers?: {
+      offerPrice: number;
+      isActive: boolean;
+      startDate: Date | null;
+      endDate: Date | null;
+    }[];
   };
   variant: {
     basePrice: number;
@@ -510,6 +516,15 @@ export class CartService {
               isActive: true,
               hasVariants: true,
               stock: true,
+              offers: {
+                where: { isActive: true },
+                select: {
+                  offerPrice: true,
+                  isActive: true,
+                  startDate: true,
+                  endDate: true,
+                }
+              }
             },
           },
           variant: {
@@ -554,13 +569,23 @@ export class CartService {
   private formatCart(cartRaw: unknown) {
     const cart = cartRaw as CartInclude;
     let subtotal = 0;
+    const now = new Date();
 
     const items = cart.items.map((item) => {
-      const basePrice = item.variant
-        ? Number(item.variant.basePrice)
-        : item.product
-          ? Number(item.product.basePrice ?? 0)
-          : Number(item.customPrice ?? 0);
+      const activeOffer = item.product?.offers?.find((o) => {
+        if (!o.isActive) return false;
+        if (o.startDate && new Date(o.startDate) > now) return false;
+        if (o.endDate && new Date(o.endDate) < now) return false;
+        return true;
+      });
+
+      const basePrice = item.customPrice !== null
+        ? Number(item.customPrice)
+        : item.variant
+          ? Number(item.variant.basePrice)
+          : item.product
+            ? activeOffer ? Number(activeOffer.offerPrice) : Number(item.product.basePrice ?? 0)
+            : 0;
 
       const optionsTotal = item.selectedOptions.reduce(
         (sum, so) => sum + Number(so.option.priceAdded),

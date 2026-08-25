@@ -15,8 +15,15 @@ export class ReviewsService {
   ) {}
 
   async submitReview(actor: JwtAccessPayload, orderId: string, dto: CreateReviewDto): Promise<void> {
+    const customer = await this.prisma.customer.findUnique({
+      where: { userId: actor.sub },
+    });
+    if (!customer) {
+      throw new NotFoundException('Customer profile not found');
+    }
+
     const order = await this.prisma.order.findUnique({
-      where: { id: orderId, customerId: actor.sub },
+      where: { id: orderId, customerId: customer.id },
       include: { review: true },
     });
 
@@ -31,7 +38,7 @@ export class ReviewsService {
     await this.prisma.orderReview.create({
       data: {
         orderId,
-        customerId: actor.sub,
+        customerId: customer.id,
         vendorId: order.vendorId,
         driverId: order.driverId,
         vendorRating: dto.vendorRating,

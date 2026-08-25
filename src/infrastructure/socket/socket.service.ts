@@ -6,7 +6,7 @@ import { Emitter } from '@socket.io/redis-emitter';
 @Injectable()
 export class SocketService implements OnModuleInit {
   private readonly logger = new Logger(SocketService.name);
-  private emitter!: any;
+  private emitter!: Emitter;
 
   constructor(private readonly redisService: RedisService) {}
 
@@ -15,36 +15,43 @@ export class SocketService implements OnModuleInit {
     this.emitter = new Emitter(redisClient);
   }
 
-  async emitToUser(userId: string, event: string, data: unknown): Promise<void> {
+  emitToUser(userId: string, event: string, data: unknown): Promise<void> {
     this.logger.debug(`Emitting ${event} to user_${userId}`);
     this.emitter.of('/events').to(`user_${userId}`).emit(event, data);
+    return Promise.resolve();
   }
 
-  async emitToRoom(room: string, event: string, data: unknown): Promise<void> {
+  emitToRoom(room: string, event: string, data: unknown): Promise<void> {
     this.emitter.of('/events').to(room).emit(event, data);
+    return Promise.resolve();
   }
 
-  async broadcast(event: string, data: unknown): Promise<void> {
+  broadcast(event: string, data: unknown): Promise<void> {
     this.emitter.of('/events').emit(event, data);
+    return Promise.resolve();
   }
 
-  async emitToSocket(socketId: string, event: string, data: unknown): Promise<void> {
+  emitToSocket(socketId: string, event: string, data: unknown): Promise<void> {
     this.emitter.of('/events').to(socketId).emit(event, data);
+    return Promise.resolve();
   }
 
-  async joinRoom(socketId: string, room: string): Promise<void> {
+  joinRoom(socketId: string, room: string): Promise<void> {
     this.emitter.of('/events').in(socketId).socketsJoin(room);
+    return Promise.resolve();
   }
 
-  async leaveRoom(socketId: string, room: string): Promise<void> {
+  leaveRoom(socketId: string, room: string): Promise<void> {
     this.emitter.of('/events').in(socketId).socketsLeave(room);
+    return Promise.resolve();
   }
 
-  async disconnectRoom(room: string): Promise<void> {
+  disconnectRoom(room: string): Promise<void> {
     this.emitter.of('/events').in(room).disconnectSockets(true);
+    return Promise.resolve();
   }
 
-  async disconnectUser(userId: string): Promise<void> {
-    await this.disconnectRoom(`user_${userId}`);
+  disconnectUser(userId: string): Promise<void> {
+    return this.disconnectRoom(`user_${userId}`);
   }
 }

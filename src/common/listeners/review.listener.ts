@@ -40,7 +40,7 @@ export class ReviewListener {
         const convertedRating = agg._avg.driverRating ? Math.round(agg._avg.driverRating * 100) : 500;
         
         await this.prisma.driver.update({
-          where: { userId: payload.driverId },
+          where: { id: payload.driverId },
           data: {
             rating: convertedRating,
             ratingCount: agg._count._all,
@@ -49,8 +49,8 @@ export class ReviewListener {
         
         this.logger.log(`Driver ${payload.driverId} rating updated: ${convertedRating} (${agg._count._all} reviews)`);
       }
-    } catch (error: any) {
-      this.logger.error(`Error processing review submitted event: ${error.message}`, error.stack);
+    } catch (error: unknown) {
+      this.logger.error(`Error processing review submitted event: ${error instanceof Error ? error.message : String(error)}`, error instanceof Error ? error.stack : undefined);
     }
   }
 }

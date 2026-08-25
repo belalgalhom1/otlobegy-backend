@@ -147,6 +147,7 @@ CREATE TABLE "platform_settings" (
     "driverSearchRadiusStepKm" DOUBLE PRECISION NOT NULL DEFAULT 2.0,
     "driverSearchRadiusMaxKm" DOUBLE PRECISION NOT NULL DEFAULT 15.0,
     "autoCancelPendingMins" INTEGER NOT NULL DEFAULT 15,
+    "mobileWalletTimeoutMins" INTEGER NOT NULL DEFAULT 15,
     "driverAcceptTimeoutSecs" INTEGER NOT NULL DEFAULT 30,
     "isMaintenanceMode" BOOLEAN NOT NULL DEFAULT false,
     "androidMinVersion" TEXT NOT NULL DEFAULT '1.0.0',

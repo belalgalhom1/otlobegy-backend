@@ -54,7 +54,7 @@ export class OrdersController {
     @CurrentUser() actor: JwtAccessPayload,
     @Body() dto: PlaceOrderDto,
   ) {
-    return this.ordersService.placeOrder(actor, dto);
+    return this.checkoutService.placeOrder(actor, dto);
   }
 
 
@@ -66,7 +66,7 @@ export class OrdersController {
     @CurrentUser() actor: JwtAccessPayload,
     @Body() dto: PlaceCustomOrderDto,
   ) {
-    return this.ordersService.placeCustomOrder(actor, dto);
+    return this.checkoutService.placeCustomOrder(actor, dto);
   }
 
   @ApiStandardResponse(Order)
@@ -113,7 +113,7 @@ export class OrdersController {
     @Param('dispatchId') dispatchId: string,
     @Body() dto: RespondToDispatchDto,
   ) {
-    return this.ordersService.respondToDispatch(actor, dispatchId, dto);
+    return this.stateService.respondToDispatch(actor, dispatchId, dto);
   }
 
   // ─── Mobile Wallet Payment Endpoints ───────────────────────────────────────
@@ -127,7 +127,7 @@ export class OrdersController {
     @CurrentUser() actor: JwtAccessPayload,
     @Param('orderId') orderId: string,
   ) {
-    return this.ordersService.customerMarkPaid(actor, orderId);
+    return this.paymentService.customerMarkPaid(actor, orderId);
   }
 
   @ApiStandardResponse(Order)
@@ -142,7 +142,7 @@ export class OrdersController {
     @Param('orderId') orderId: string,
     @Body() dto: ConfirmPaymentDto,
   ) {
-    return this.ordersService.driverConfirmPayment(actor, orderId, dto.received);
+    return this.paymentService.driverConfirmPayment(actor, orderId, dto.received);
   }
 
   @ApiStandardResponse(Order)
@@ -157,7 +157,7 @@ export class OrdersController {
     @Param('orderId') orderId: string,
     @Body() dto: UpdateOrderStatusDto,
   ) {
-    return this.ordersService.driverUpdateStatus(actor, orderId, dto);
+    return this.stateService.driverUpdateStatus(actor, orderId, dto);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -166,6 +166,7 @@ export class OrdersController {
 
   @ApiStandardResponse(Order)
   @Get('vendor/:vendorId')
+  @Roles(Role.VENDOR_MEMBER, Role.ADMIN, Role.SUPER_ADMIN)
   @ApiOperation({ summary: 'Get orders for a vendor (vendor member or admin)' })
   getVendorOrders(
     @CurrentUser() actor: JwtAccessPayload,
@@ -177,6 +178,7 @@ export class OrdersController {
 
   @ApiStandardResponse(Order)
   @Patch('vendor/:orderId/status')
+  @Roles(Role.VENDOR_MEMBER, Role.ADMIN, Role.SUPER_ADMIN)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Vendor updates order status' })
   vendorUpdateStatus(
@@ -184,7 +186,7 @@ export class OrdersController {
     @Param('orderId') orderId: string,
     @Body() dto: UpdateOrderStatusDto,
   ) {
-    return this.ordersService.vendorUpdateStatus(actor, orderId, dto);
+    return this.stateService.vendorUpdateStatus(actor, orderId, dto);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -212,7 +214,7 @@ export class OrdersController {
     @CurrentUser() actor: JwtAccessPayload,
     @Param('orderId') orderId: string,
   ) {
-    return this.ordersService.approveOrderFee(actor, orderId);
+    return this.paymentService.approveOrderFee(actor, orderId);
   }
 
   @ApiStandardResponse(Order)
@@ -224,7 +226,7 @@ export class OrdersController {
     @Param('orderId') orderId: string,
     @Body('reason') reason?: string,
   ) {
-    return this.ordersService.cancelOrder(
+    return this.stateService.cancelOrder(
       actor,
       orderId,
       reason ?? 'Cancelled by user',
@@ -253,7 +255,7 @@ export class OrdersController {
     @Param('orderId') orderId: string,
     @Body() dto: AdminAssignDriverDto,
   ) {
-    return this.ordersService.adminForceAssignDriver(actor, orderId, dto);
+    return this.stateService.adminForceAssignDriver(actor, orderId, dto);
   }
 
   // ─── Order Item Modifications & Direct Orders ────────────────────────────────
@@ -268,7 +270,7 @@ export class OrdersController {
     @CurrentUser() actor: JwtAccessPayload,
     @Body() dto: PlaceDirectOrderDto,
   ) {
-    return this.ordersService.adminPlaceDirectOrder(actor, dto);
+    return this.checkoutService.adminPlaceDirectOrder(actor, dto);
   }
 
   @ApiStandardResponse(Order)
@@ -279,7 +281,7 @@ export class OrdersController {
     @Param('id') orderId: string,
     @Body() dto: EditOrderItemsDto,
   ) {
-    return this.ordersService.editOrderItems(actor, orderId, dto);
+    return this.checkoutService.editOrderItems(actor, orderId, dto);
   }
 
   @ApiStandardResponse(Order)
@@ -290,7 +292,7 @@ export class OrdersController {
     @CurrentUser() actor: JwtAccessPayload,
     @Param('id') orderId: string,
   ) {
-    return this.ordersService.acceptOrderChanges(actor, orderId);
+    return this.checkoutService.acceptOrderChanges(actor, orderId);
   }
 
   @ApiStandardResponse(Order)
@@ -301,6 +303,6 @@ export class OrdersController {
     @CurrentUser() actor: JwtAccessPayload,
     @Param('id') orderId: string,
   ) {
-    return this.ordersService.rejectOrderChanges(actor, orderId);
+    return this.checkoutService.rejectOrderChanges(actor, orderId);
   }
 }
