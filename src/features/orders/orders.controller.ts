@@ -32,6 +32,10 @@ import { ApiStandardResponse } from '../../common/decorators/api-response.decora
 import { Order } from '../../_gen/prisma-classes/order';
 import { OrderDispatch } from '../../_gen/prisma-classes/order_dispatch';
 
+import { OrdersCheckoutService } from './orders-checkout.service';
+import { OrdersStateService } from './orders-state.service';
+import { OrdersPaymentService } from './orders-payment.service';
+
 
 @ApiTags('Orders')
 @ApiBearerAuth()
@@ -40,6 +44,9 @@ export class OrdersController {
   constructor(
     private readonly ordersService: OrdersService,
     private readonly dispatchService: DispatchService,
+    private readonly checkoutService: OrdersCheckoutService,
+    private readonly stateService: OrdersStateService,
+    private readonly paymentService: OrdersPaymentService,
   ) {}
 
   // ═══════════════════════════════════════════════════════════════════════════
