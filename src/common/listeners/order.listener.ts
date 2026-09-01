@@ -231,7 +231,8 @@ export class OrderListener {
     // Assign driver to chat if they just took the order
     if (
       event.newStatus === OrderStatus.DRIVER_ASSIGNED ||
-      event.newStatus === OrderStatus.PENDING_PAYMENT
+      event.newStatus === OrderStatus.PENDING_PAYMENT ||
+      event.newStatus === OrderStatus.PENDING_CUSTOMER_APPROVAL
     ) {
       const order = await this.prisma.order.findUnique({
         where: { id: event.orderId },
