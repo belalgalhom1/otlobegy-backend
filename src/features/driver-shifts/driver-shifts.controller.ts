@@ -54,9 +54,9 @@ export class DriverShiftsController {
   @ApiStandardResponse()
   @Delete('admin/pools/:poolId')
   @RequirePermissions(Permission.MANAGE_DRIVERS)
-  @ApiOperation({ summary: '[Admin] Delete a shift pool' })
-  deleteShiftPool(@Param('poolId') poolId: string) {
-    return this.shiftsService.deleteShiftPool(poolId);
+  @ApiOperation({ summary: '[Admin] Terminate/Delete a shift pool' })
+  terminateShiftPool(@Param('poolId') poolId: string) {
+    return this.shiftsService.terminateShiftPool(poolId);
   }
 
   @ApiStandardResponse()

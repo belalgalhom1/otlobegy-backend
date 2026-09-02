@@ -12,6 +12,8 @@ import {
   ShiftReminderEvent,
   ShiftMissedEvent,
   ShiftSwapCancelledEvent,
+  ShiftDisabledEvent,
+  DriverStatusChangedEvent,
 } from 'src/common/events';
 import {
   GenerateShiftPoolsDto,
@@ -47,9 +49,9 @@ export class DriverShiftsService {
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
-  // ═══════════════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   // ADMIN SHIFT MANAGEMENT
-  // ═══════════════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
   async generateShiftPools(dto: GenerateShiftPoolsDto) {
     const startDate = parseISO(dto.startDate);
@@ -128,9 +130,65 @@ export class DriverShiftsService {
     }));
   }
 
-  async deleteShiftPool(poolId: string) {
+  async terminateShiftPool(poolId: string) {
+    const shifts = await this.prisma.driverShift.findMany({
+      where: { shiftPoolId: poolId },
+      include: { driver: { include: { user: true } } },
+    });
+
+    // COMPLETED or MISSED shifts must be preserved for history/earnings.
+    const historicalShifts = shifts.filter(
+      (s) => s.status === 'COMPLETED' || s.status === 'MISSED'
+    );
+    
+    // ACTIVE, SCHEDULED, and CANCELLED shifts will be destroyed.
+    const shiftsToKill = shifts.filter(
+      (s) => s.status === 'ACTIVE' || s.status === 'SCHEDULED' || s.status === 'CANCELLED'
+    );
+
+    if (shiftsToKill.length > 0) {
+      // For any driver currently ACTIVE on this shift, force them OFFLINE.
+      const activeShifts = shiftsToKill.filter(s => s.status === 'ACTIVE');
+      if (activeShifts.length > 0) {
+        await this.prisma.driver.updateMany({
+          where: { id: { in: activeShifts.map(s => s.driverId) } },
+          data: { status: 'OFFLINE' },
+        });
+
+        for (const shift of activeShifts) {
+          this.eventEmitter.emit(
+            EVENTS.DRIVER_STATUS_CHANGED,
+            new DriverStatusChangedEvent(shift.driverId, shift.driver.user.id, shift.driver.status, 'OFFLINE', 'Shift was forcefully deleted by admin.')
+          );
+        }
+      }
+
+      // Destroy the shifts
+      await this.prisma.driverShift.deleteMany({
+        where: { id: { in: shiftsToKill.map((s) => s.id) } },
+      });
+
+      // Notify the apps to remove the shift from UI
+      for (const shift of shiftsToKill) {
+        this.eventEmitter.emit(
+          EVENTS.SHIFT_DISABLED,
+          new ShiftDisabledEvent(shift.driver.user.id, shift.id),
+        );
+      }
+    }
+
+    if (historicalShifts.length > 0) {
+      // Cannot completely delete the pool because of historical records. Just disable it.
+      await this.prisma.shiftPool.update({
+        where: { id: poolId },
+        data: { maxDrivers: 0 },
+      });
+      return { success: true, message: 'Pool contained past completed shifts. It was disabled, and all active/future shifts were killed.' };
+    }
+
+    // No completed history exists, completely obliterate the pool.
     await this.prisma.shiftPool.delete({ where: { id: poolId } });
-    return { success: true };
+    return { success: true, message: 'Shift pool completely deleted and all active drivers kicked offline.' };
   }
 
   async adminAssignShift(dto: AdminAssignShiftDto) {
@@ -165,9 +223,9 @@ export class DriverShiftsService {
     return shift;
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   // DRIVER BOOKING
-  // ═══════════════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
   async checkShiftsEnabled() {
     const settings = await this.platformSettings.getSettings();
@@ -340,9 +398,9 @@ export class DriverShiftsService {
     });
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   // SWAP BOARD
-  // ═══════════════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
   async offerSwap(userId: string, shiftId: string) {
     await this.checkShiftsEnabled();
@@ -467,9 +525,9 @@ export class DriverShiftsService {
     });
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   // ATTENDANCE CRON JOBS
-  // ═══════════════════════════════════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
   async handle30MinShiftWarning() {
     try {
@@ -568,3 +626,4 @@ export class DriverShiftsService {
     }
   }
 }
+

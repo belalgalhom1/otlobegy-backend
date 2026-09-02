@@ -28,6 +28,7 @@ export const EVENTS = {
   SHIFT_REMINDER: 'shift.reminder',
   SHIFT_MISSED: 'shift.missed',
   SHIFT_SWAP_CANCELLED: 'shift.swap.cancelled',
+  SHIFT_DISABLED: 'shift.disabled',
 
   // Audit
   AUDIT_LOG_CREATED: 'audit.log.created',

@@ -229,3 +229,10 @@ export class ShiftSwapCancelledEvent {
     public readonly shiftId: string,
   ) {}
 }
+
+export class ShiftDisabledEvent {
+  constructor(
+    public readonly driverUserId: string,
+    public readonly shiftId: string,
+  ) {}
+}
