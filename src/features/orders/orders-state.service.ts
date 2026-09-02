@@ -176,14 +176,9 @@ async driverUpdateStatus(
       throw new ForbiddenException(OrderErrors.NOT_ASSIGNED_TO_ORDER);
     }
 
-    if (dto.status === OrderStatus.PICKED_UP) {
-      if ((order.vendor as any)?.isContracted) {
-        throw new ForbiddenException(
-          'For contracted stores, the store employee must confirm they received the cash to mark the order as picked up.',
-        );
-      }
-    }
-
+    // Restriction removed: allow drivers to mark the order as PICKED_UP 
+    // even if the store is contracted, to prevent drivers from getting stuck 
+    // if the vendor employee forgets to update the status on their tablet.
     const expected = DRIVER_ALLOWED_TRANSITIONS[order.status];
     if (!expected || !expected.includes(dto.status)) {
       throw new BadRequestException(
