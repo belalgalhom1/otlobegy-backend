@@ -27,7 +27,8 @@ import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { RequirePermissions } from 'src/common/decorators/permissions.decorator';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { Permission, Role } from '@prisma/client';
-import { ApiStandardResponse } from '../../common/decorators/api-response.decorator';
+import { ApiStandardResponse, ApiPaginatedResponse, ApiArrayResponse } from 'src/common/decorators/api-response.decorator';
+import { DriverResponseDto } from 'src/common/dto/response-models.dto';
 import { Driver } from '../../_gen/prisma-classes/driver';
 import { DriverShift } from '../../_gen/prisma-classes/driver_shift';
 import { DriverWalletTransaction } from '../../_gen/prisma-classes/driver_wallet_transaction';
@@ -51,7 +52,7 @@ export class DriversController {
   // SELF-SERVICE  — any authenticated user can register; then DRIVER only
   // ═══════════════════════════════════════════════════════════════════════════
 
-  @ApiStandardResponse(Driver)
+  @ApiStandardResponse()
   @Post('register')
   @ApiOperation({
     summary: 'Register as a driver (creates driver profile, upgrades role)',
@@ -60,7 +61,7 @@ export class DriversController {
     return this.driversService.register(userId, dto);
   }
 
-  @ApiStandardResponse(Driver)
+  @ApiStandardResponse()
   @Get('me')
   @Roles(Role.DRIVER)
   @ApiOperation({ summary: 'Get my driver profile' })
@@ -68,7 +69,7 @@ export class DriversController {
     return this.driversService.getMyProfile(userId);
   }
 
-  @ApiStandardResponse(Driver)
+  @ApiStandardResponse()
   @Patch('me')
   @Roles(Role.DRIVER)
   @ApiOperation({ summary: 'Update my driver profile' })
@@ -91,7 +92,7 @@ export class DriversController {
     return this.driversService.uploadAvatar(userId, file);
   }
 
-  @ApiStandardResponse(Driver)
+  @ApiStandardResponse()
   @Patch('me/status')
   @Roles(Role.DRIVER)
   @HttpCode(HttpStatus.OK)
@@ -109,7 +110,7 @@ export class DriversController {
 
   // ─── Shifts ───────────────────────────────────────────────────────────────
 
-  @ApiStandardResponse(DriverShift)
+  @ApiStandardResponse()
   @Post('me/shifts')
   @Roles(Role.DRIVER)
   @ApiOperation({ summary: 'Create a shift' })
@@ -120,7 +121,7 @@ export class DriversController {
     return this.driversService.createShift(userId, dto);
   }
 
-  @ApiStandardResponse(DriverShift)
+  @ApiStandardResponse()
   @Get('me/shifts')
   @Roles(Role.DRIVER)
   @ApiOperation({ summary: 'Get my shifts' })
@@ -128,7 +129,7 @@ export class DriversController {
     return this.driversService.getMyShifts(userId);
   }
 
-  @ApiStandardResponse(DriverShift)
+  @ApiStandardResponse()
   @Post('me/shifts/:shiftId/start')
   @Roles(Role.DRIVER)
   @HttpCode(HttpStatus.OK)
@@ -140,7 +141,7 @@ export class DriversController {
     return this.driversService.startShift(userId, shiftId);
   }
 
-  @ApiStandardResponse(DriverShift)
+  @ApiStandardResponse()
   @Post('me/shifts/:shiftId/end')
   @Roles(Role.DRIVER)
   @HttpCode(HttpStatus.OK)
@@ -162,7 +163,7 @@ export class DriversController {
     return this.driversService.getWalletBalance(userId);
   }
 
-  @ApiStandardResponse(DriverWalletTransaction)
+  @ApiStandardResponse()
   @Get('me/wallet/transactions')
   @Roles(Role.DRIVER)
   @ApiOperation({ summary: 'Get wallet transaction history' })
@@ -177,7 +178,7 @@ export class DriversController {
   // ADMIN
   // ═══════════════════════════════════════════════════════════════════════════
 
-  @ApiStandardResponse(Driver)
+  @ApiStandardResponse()
   @Post('admin')
   @RequirePermissions(Permission.MANAGE_DRIVERS)
   @ApiOperation({ summary: '[Admin] Create a new driver directly' })
@@ -201,7 +202,7 @@ export class DriversController {
     return this.driversService.adminCreateDriver(user.id, actor.sub, dto);
   }
 
-  @ApiStandardResponse(Driver)
+  @ApiStandardResponse()
   @Patch(':driverId/admin')
   @RequirePermissions(Permission.MANAGE_DRIVERS)
   @ApiOperation({ summary: '[Admin] Update driver profile and sensitive fields' })
@@ -213,7 +214,7 @@ export class DriversController {
     return this.driversService.adminUpdateDriver(driverId, actor.sub, dto);
   }
 
-  @ApiStandardResponse(Driver)
+  @ApiStandardResponse()
   @Get()
   @RequirePermissions(Permission.MANAGE_DRIVERS)
   @ApiOperation({ summary: '[Admin] List all drivers' })
@@ -221,7 +222,7 @@ export class DriversController {
     return this.driversService.adminFindAll(dto);
   }
 
-  @ApiStandardResponse(Driver)
+  @ApiStandardResponse()
   @Get(':driverId')
   @RequirePermissions(Permission.MANAGE_DRIVERS)
   @ApiOperation({ summary: '[Admin] Get a driver by ID' })
@@ -229,7 +230,7 @@ export class DriversController {
     return this.driversService.adminFindOne(driverId);
   }
 
-  @ApiStandardResponse(Driver)
+  @ApiStandardResponse()
   @Post(':driverId/suspend')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions(Permission.MANAGE_DRIVERS)
@@ -238,7 +239,7 @@ export class DriversController {
     return this.driversService.adminSuspend(driverId);
   }
 
-  @ApiStandardResponse(Driver)
+  @ApiStandardResponse()
   @Post(':driverId/unsuspend')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions(Permission.MANAGE_DRIVERS)
@@ -247,7 +248,7 @@ export class DriversController {
     return this.driversService.adminUnsuspend(driverId);
   }
 
-  @ApiStandardResponse(DriverShift)
+  @ApiStandardResponse()
   @Post(':driverId/shifts')
   @RequirePermissions(Permission.MANAGE_DRIVERS)
   @ApiOperation({ summary: '[Admin] Create a shift for a driver' })
@@ -258,7 +259,7 @@ export class DriversController {
     return this.driversService.adminCreateShift(driverId, dto);
   }
 
-  @ApiStandardResponse(DriverShift)
+  @ApiStandardResponse()
   @Get(':driverId/shifts')
   @RequirePermissions(Permission.MANAGE_DRIVERS)
   @ApiOperation({ summary: '[Admin] Get shifts for a driver' })

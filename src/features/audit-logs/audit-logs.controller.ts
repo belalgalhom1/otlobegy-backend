@@ -8,7 +8,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { ApiStandardResponse } from '../../common/decorators/api-response.decorator';
-
+import { AuditLogResponseDto } from "src/common/dto/response-models.dto";
 
 @ApiTags('Audit Logs')
 @ApiBearerAuth()
@@ -16,7 +16,7 @@ import { ApiStandardResponse } from '../../common/decorators/api-response.decora
 export class AuditLogsController {
   constructor(private readonly service: AuditLogsService) {}
 
-  @ApiStandardResponse(AuditLog)
+  @ApiStandardResponse(AuditLogResponseDto)
   @Get()
   @ApiOperation({ summary: 'List audit logs with pagination and filters' })
   @Roles(Role.SUPER_ADMIN, Role.ADMIN, Role.VENDOR_MEMBER)

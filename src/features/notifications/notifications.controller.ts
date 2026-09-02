@@ -30,7 +30,7 @@ import { Notification } from '../../_gen/prisma-classes/notification';
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
-  @ApiStandardResponse(Notification)
+  @ApiStandardResponse()
   @Get()
   @ApiOperation({ summary: 'List my notifications' })
   list(
@@ -47,7 +47,7 @@ export class NotificationsController {
     return this.notificationsService.getUnreadCount(userId);
   }
 
-  @ApiStandardResponse(Notification)
+  @ApiStandardResponse()
   @Get(':id')
   @ApiOperation({ summary: 'Get a specific notification by ID' })
   getOne(@CurrentUser('sub') userId: string, @Param('id') id: string) {
@@ -65,7 +65,7 @@ export class NotificationsController {
     return this.notificationsService.markRead(userId, dto);
   }
 
-  @ApiStandardResponse(Notification)
+  @ApiStandardResponse()
   @Patch(':id/read')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Mark a specific notification as read' })
@@ -73,7 +73,7 @@ export class NotificationsController {
     return this.notificationsService.markOneRead(userId, id);
   }
 
-  @ApiStandardResponse(Notification)
+  @ApiStandardResponse()
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Delete a specific notification' })

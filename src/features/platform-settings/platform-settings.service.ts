@@ -8,6 +8,7 @@ import {
   UpdatePlatformSettingsDto,
   AppVersionCheckDto,
 } from './dto/platform-settings.dto';
+import { PlatformSettingErrors } from '../../common/constants/response.constants';
 
 // Semantic version compare: returns true if `current` satisfies `minimum`
 function semverGte(current: string, minimum: string): boolean {
@@ -57,7 +58,7 @@ export class PlatformSettingsService {
           settings = await this.prisma.platformSetting.findUnique({
             where: { id: 'default' },
           });
-          if (!settings) throw new Error('Failed to retrieve platform settings after concurrent creation');
+          if (!settings) throw new Error(PlatformSettingErrors.CONCURRENT_CREATION_FAILED);
         } else {
           throw error;
         }

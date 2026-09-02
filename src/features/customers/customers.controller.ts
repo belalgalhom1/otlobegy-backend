@@ -21,7 +21,8 @@ import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { RequirePermissions } from 'src/common/decorators/permissions.decorator';
 import { Permission, Role } from '@prisma/client';
-import { ApiStandardResponse } from '../../common/decorators/api-response.decorator';
+import { ApiStandardResponse, ApiPaginatedResponse, ApiArrayResponse } from 'src/common/decorators/api-response.decorator';
+import { CustomerResponseDto } from 'src/common/dto/response-models.dto';
 
 import {
   ApiTags,

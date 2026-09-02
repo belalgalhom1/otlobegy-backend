@@ -35,6 +35,7 @@ import {
   ApiOperation,
   ApiBearerAuth,
 } from '@nestjs/swagger';
+import { ProductResponseDto, ProductVariantResponseDto, ProductOptionGroupResponseDto, ProductOptionResponseDto } from "src/common/dto/response-models.dto";
 
 @ApiTags('Vendors - Products')
 @Controller('vendors/:vendorId/products')
@@ -52,7 +53,7 @@ export class ProductsController {
   }
 
   @Public()
-  @ApiStandardResponse()
+  @ApiStandardResponse(ProductResponseDto)
   @Get(':productId')
   @ApiOperation({ summary: 'Get a specific product by ID' })
   findOne(
@@ -64,7 +65,7 @@ export class ProductsController {
 
   // ─── Vendor member: any member can read; OWNER/MANAGER can write ──────────
 
-  @ApiStandardResponse()
+  @ApiStandardResponse(ProductResponseDto)
   @Post()
   @ApiBearerAuth()
   @VendorMember({
@@ -79,7 +80,7 @@ export class ProductsController {
     return this.service.create(vendorId, dto);
   }
 
-  @ApiStandardResponse()
+  @ApiStandardResponse(ProductResponseDto)
   @Patch(':productId')
   @ApiBearerAuth()
   @VendorMember({
@@ -158,7 +159,7 @@ export class ProductsController {
     return this.service.addVariant(vendorId, productId, dto);
   }
 
-  @ApiStandardResponse()
+  @ApiStandardResponse(ProductVariantResponseDto)
   @Patch(':productId/variants/:variantId')
   @ApiBearerAuth()
   @VendorMember({
@@ -219,7 +220,7 @@ export class ProductsController {
     return this.service.addOptionGroup(vendorId, productId, dto);
   }
 
-  @ApiStandardResponse()
+  @ApiStandardResponse(ProductOptionGroupResponseDto)
   @Patch(':productId/option-groups/:groupId')
   @ApiBearerAuth()
   @VendorMember({
@@ -303,7 +304,7 @@ export class ProductsController {
     return this.service.addOption(vendorId, productId, groupId, dto);
   }
 
-  @ApiStandardResponse()
+  @ApiStandardResponse(ProductOptionResponseDto)
   @Patch(':productId/option-groups/:groupId/options/:optionId')
   @ApiBearerAuth()
   @VendorMember({

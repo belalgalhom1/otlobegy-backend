@@ -5,6 +5,7 @@ import Redis, { Cluster } from 'ioredis';
 import { ConfigService } from '@nestjs/config';
 import { INestApplicationContext, Logger } from '@nestjs/common';
 import { parseRedisConfig } from '../redis/redis.parser';
+import { SocketErrors } from '../../common/constants/response.constants';
 
 export class RedisIoAdapter extends IoAdapter {
   private adapterConstructor!: ReturnType<typeof createAdapter>;
@@ -66,9 +67,7 @@ export class RedisIoAdapter extends IoAdapter {
     options?: ServerOptions,
   ): ReturnType<IoAdapter['createIOServer']> {
     if (!this.adapterConstructor) {
-      throw new Error(
-        'Redis adapter not initialized. Call connectToRedis() first.',
-      );
+      throw new Error(SocketErrors.MISSING_ADAPTER);
     }
     const server = super.createIOServer(port, options);
     server.adapter(this.adapterConstructor);

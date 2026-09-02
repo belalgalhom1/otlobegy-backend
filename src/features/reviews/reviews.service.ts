@@ -4,7 +4,7 @@ import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { CreateReviewDto } from './dto/create-review.dto';
 import type { JwtAccessPayload } from '../../common/interfaces/jwt-payload.interface';
 import { OrderStatus } from '@prisma/client';
-import { OrderErrors, ReviewErrors } from '../../common/constants/response.constants';
+import { OrderErrors, ReviewErrors, CustomerErrors } from '../../common/constants/response.constants';
 import { EVENTS } from '../../common/events/event-names';
 
 @Injectable()
@@ -19,7 +19,7 @@ export class ReviewsService {
       where: { userId: actor.sub },
     });
     if (!customer) {
-      throw new NotFoundException('Customer profile not found');
+      throw new NotFoundException(CustomerErrors.PROFILE_NOT_FOUND);
     }
 
     const order = await this.prisma.order.findUnique({

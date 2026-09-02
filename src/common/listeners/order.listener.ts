@@ -228,6 +228,22 @@ export class OrderListener {
       );
     }
 
+    // Manage Customer Approval Timeout
+    if (event.newStatus === OrderStatus.PENDING_CUSTOMER_APPROVAL) {
+      await this.ordersQueue.add(
+        ORDER_JOBS.CUSTOMER_APPROVAL_TIMEOUT,
+        { orderId: event.orderId, orderNumber: event.orderNumber },
+        { delay: 3 * 60 * 1000, jobId: `approval-timeout-${event.orderId}` }, // 3 minutes timeout
+      );
+    } else if (
+      event.newStatus === OrderStatus.DRIVER_ASSIGNED ||
+      event.newStatus === OrderStatus.PENDING_PAYMENT ||
+      event.newStatus === OrderStatus.CANCELLED
+    ) {
+      // Remove the timeout if it was approved or cancelled
+      await this.ordersQueue.remove(`approval-timeout-${event.orderId}`).catch(() => {});
+    }
+
     // Assign driver to chat if they just took the order
     if (
       event.newStatus === OrderStatus.DRIVER_ASSIGNED ||

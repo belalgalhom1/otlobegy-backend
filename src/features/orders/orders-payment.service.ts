@@ -83,7 +83,7 @@ async approveOrderFee(actor: JwtAccessPayload, orderId: string) {
       });
 
       if (updated.count === 0) {
-        throw new BadRequestException('Order state changed concurrently. Please refresh.');
+        throw new BadRequestException(OrderErrors.CONCURRENT_STATE_CHANGE);
       }
 
       await tx.orderStatusEvent.create({

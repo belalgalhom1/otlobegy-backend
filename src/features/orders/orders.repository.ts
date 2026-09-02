@@ -341,7 +341,7 @@ export class OrdersRepository {
           data: { status, ...extraData },
         });
         if (count.count === 0) {
-          throw new BadRequestException('Order state changed concurrently. Please refresh.');
+          throw new BadRequestException(OrderErrors.CONCURRENT_STATE_CHANGE);
         }
       } else {
         await tx.order.update({

@@ -36,7 +36,7 @@ export class PlatformSettingsController {
   // Mobile clients need maintenance mode + app versions on startup.
 
   @Public()
-  @ApiStandardResponse(PublicPlatformSettingsDto)
+  @ApiStandardResponse()
   @Get('public')
   @ApiOperation({
     summary: 'Get public platform settings (maintenance mode, versions)',
@@ -57,7 +57,7 @@ export class PlatformSettingsController {
   // ─── Admin ────────────────────────────────────────────────────────────────
   // Full settings read requires MANAGE_SETTINGS permission.
 
-  @ApiStandardResponse(PlatformSetting)
+  @ApiStandardResponse()
   @Get()
   @ApiBearerAuth()
   @RequirePermissions(Permission.MANAGE_SETTINGS)
@@ -66,7 +66,7 @@ export class PlatformSettingsController {
     return this.service.getSettings();
   }
 
-  @ApiStandardResponse(PlatformSetting)
+  @ApiStandardResponse()
   @Patch()
   @ApiBearerAuth()
   @RequirePermissions(Permission.MANAGE_SETTINGS)

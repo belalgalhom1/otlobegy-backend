@@ -134,7 +134,7 @@ export class AuthService {
 
     if (!user.password) {
       this.logger.warn(`Login failed: OAuth account without password for ${dto.email}`);
-      throw new UnauthorizedException('This account uses social login. Please sign in with Google or Apple.');
+      throw new UnauthorizedException(AuthErrors.SOCIAL_LOGIN_REQUIRED);
     }
 
     this.logger.debug(
@@ -191,7 +191,7 @@ export class AuthService {
         audience: googleClientIds.map((id) => id.trim()).filter(Boolean),
       });
       const payload = ticket.getPayload();
-      if (!payload) throw new Error('No payload found');
+      if (!payload) throw new UnauthorizedException(AuthErrors.NO_PAYLOAD_FOUND);
       return {
         sub: payload.sub,
         email: payload.email,
@@ -199,7 +199,7 @@ export class AuthService {
       };
     } catch (error: any) {
       this.logger.error(`Google token verification failed: ${error.message}`);
-      throw new UnauthorizedException('Invalid Google token');
+      throw new UnauthorizedException(AuthErrors.INVALID_GOOGLE_TOKEN);
     }
   }
 
@@ -216,7 +216,7 @@ export class AuthService {
       };
     } catch (error: any) {
       this.logger.error(`Apple token verification failed: ${error.message}`);
-      throw new UnauthorizedException('Invalid Apple token');
+      throw new UnauthorizedException(AuthErrors.INVALID_APPLE_TOKEN);
     }
   }
 
@@ -237,11 +237,11 @@ export class AuthService {
       providerAccountId = payload.sub;
       email = payload.email || email;
     } else {
-      throw new BadRequestException('Unsupported social provider');
+      throw new BadRequestException(AuthErrors.UNSUPPORTED_SOCIAL_PROVIDER);
     }
 
     if (!providerAccountId) {
-      throw new BadRequestException('Could not verify provider account ID');
+      throw new BadRequestException(AuthErrors.SOCIAL_ACCOUNT_VERIFICATION_FAILED);
     }
 
     // 1. Check if Account exists
@@ -322,7 +322,7 @@ export class AuthService {
 
     if (dto.app === 'driver' && user.role !== Role.DRIVER) {
       this.logger.warn(`Social login failed: Invalid app access for user ${user.email}`);
-      throw new ForbiddenException('Drivers can only log in using the Driver App.');
+      throw new ForbiddenException(AuthErrors.ONLY_DRIVERS_APP_ALLOWED);
     }
 
     if (user.role === Role.DRIVER && user.driver && !user.driver.isApproved) {

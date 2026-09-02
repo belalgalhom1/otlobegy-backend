@@ -27,6 +27,25 @@ export const ValidationErrors = {
   METHOD_INVALID: 'validation.error.method_invalid',
 };
 
+export const AppErrors = {
+  MISSING_HEADER: 'app.error.missing_header',
+  UNSUPPORTED_CLIENT: 'app.error.unsupported_client',
+};
+
+export const PlatformSettingErrors = {
+  NOT_FOUND: 'platform_settings.error.not_found',
+  CONCURRENT_CREATION_FAILED: 'platform_settings.error.concurrent_creation_failed',
+};
+
+export const ConfigErrors = {
+  MISSING_ENV: 'config.error.missing_env',
+};
+
+
+export const SocketErrors = {
+  MISSING_ADAPTER: 'socket.error.missing_adapter',
+};
+
 export const AuthErrors = {
   USER_EXISTS: 'auth.error.user_exists',
   INVALID_CREDENTIALS: 'auth.error.invalid_credentials',
@@ -39,6 +58,13 @@ export const AuthErrors = {
   MISSING_HEADER: 'auth.error.missing_header',
   ONLY_CUSTOMER_REGISTRATION: 'auth.error.only_customer_registration',
   TOO_MANY_FAILED_OTP: 'auth.error.too_many_failed_otp',
+  SOCIAL_LOGIN_REQUIRED: 'auth.error.social_login_required',
+  INVALID_GOOGLE_TOKEN: 'auth.error.invalid_google_token',
+  INVALID_APPLE_TOKEN: 'auth.error.invalid_apple_token',
+  UNSUPPORTED_SOCIAL_PROVIDER: 'auth.error.unsupported_social_provider',
+  SOCIAL_ACCOUNT_VERIFICATION_FAILED: 'auth.error.social_account_verification_failed',
+  ONLY_DRIVERS_APP_ALLOWED: 'auth.error.only_drivers_app_allowed',
+  NO_PAYLOAD_FOUND: 'auth.error.no_payload_found',
 };
 
 export const UserErrors = {
@@ -102,6 +128,7 @@ export const CustomerErrors = {
   CANNOT_ORDER: 'customer.error.cannot_order',
   INSUFFICIENT_COIN_BALANCE: 'customer.error.insufficient_coin_balance',
   MINIMUM_COINS_REQUIRED: 'customer.error.minimum_coins_required',
+  PROFILE_NOT_FOUND: 'customer.error.profile_not_found',
 };
 
 export const TicketErrors = {
@@ -238,6 +265,7 @@ export const OrderErrors = {
   INVALID_PRODUCT_MESSAGE: 'order.error.invalid_product_message',
   MAX_ACTIVE_ORDERS_REACHED: 'order.error.max_active_orders_reached',
   CONCURRENT_MODIFICATION: 'order.error.concurrent_modification',
+  CONCURRENT_STATE_CHANGE: 'order.error.concurrent_state_change',
 };
 
 export const CartErrors = {

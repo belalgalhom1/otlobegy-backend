@@ -382,6 +382,9 @@ async cancelOrder(
       await this.ordersRepository.freeDriver(order.driverId);
     }
 
+    // Always abort any active dispatch attempts
+    await this.ordersRepository.cancelPendingDispatches(orderId);
+
     const orderWithRelations = order as {
       driver: { userId: string } | null;
       customer: { user: { id: string } };

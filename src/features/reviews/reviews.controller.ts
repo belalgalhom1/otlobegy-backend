@@ -29,6 +29,7 @@ export class ReviewsController {
   @ApiResponse({ status: 200, description: 'Review submitted successfully' })
   @ApiResponse({ status: 400, description: 'Order not delivered or already rated' })
   @ApiResponse({ status: 404, description: 'Order not found' })
+    @ApiStandardResponse()
   async submitReview(
     @CurrentUser() actor: JwtAccessPayload,
     @Param('orderId') orderId: string,

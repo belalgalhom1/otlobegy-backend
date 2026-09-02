@@ -47,3 +47,61 @@ export const ApiStandardResponse = <DataDto extends Type<unknown>>(
 
   return applyDecorators(...decorators);
 };
+
+export const ApiArrayResponse = <DataDto extends Type<unknown>>(
+  dataDto: DataDto,
+) => {
+  return applyDecorators(
+    ApiExtraModels(ApiResponseDto, dataDto),
+    ApiOkResponse({
+      schema: {
+        allOf: [
+          { $ref: getSchemaPath(ApiResponseDto) },
+          {
+            properties: {
+              data: {
+                type: 'array',
+                items: { $ref: getSchemaPath(dataDto) },
+              },
+            },
+          },
+        ],
+      },
+    }),
+  );
+};
+
+import { PaginatedResponseDto } from '../dto/paginated-response.dto';
+
+export const ApiPaginatedResponse = <DataDto extends Type<unknown>>(
+  dataDto: DataDto,
+) => {
+  return applyDecorators(
+    ApiExtraModels(ApiResponseDto, PaginatedResponseDto, dataDto),
+    ApiOkResponse({
+      schema: {
+        allOf: [
+          { $ref: getSchemaPath(ApiResponseDto) },
+          {
+            properties: {
+              data: {
+                allOf: [
+                  { $ref: getSchemaPath(PaginatedResponseDto) },
+                  {
+                    properties: {
+                      items: {
+                        type: 'array',
+                        items: { $ref: getSchemaPath(dataDto) },
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      },
+    }),
+  );
+};
+
