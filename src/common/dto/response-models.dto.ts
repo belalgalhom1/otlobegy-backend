@@ -1,4 +1,4 @@
-import { IntersectionType, PartialType } from '@nestjs/swagger';
+import { IntersectionType, PartialType, ApiProperty } from '@nestjs/swagger';
 import { PrismaModel } from '../../_gen/prisma-classes/index';
 
 export class AccountResponseDto extends IntersectionType(
