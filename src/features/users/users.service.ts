@@ -4,6 +4,7 @@ import {
   UnauthorizedException,
   BadRequestException,
   ForbiddenException,
+  ConflictException,
   Logger,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
@@ -94,6 +95,20 @@ export class UsersService {
 
     const emailChanged = dto.email && dto.email !== user.email;
     const phoneChanged = dto.phone && dto.phone !== user.phone;
+
+    if (emailChanged) {
+      const existingEmail = await this.prisma.user.findUnique({ where: { email: dto.email } });
+      if (existingEmail && existingEmail.id !== userId) {
+        throw new ConflictException(UserErrors.EMAIL_ALREADY_EXISTS);
+      }
+    }
+
+    if (phoneChanged) {
+      const existingPhone = await this.prisma.user.findUnique({ where: { phone: dto.phone } });
+      if (existingPhone && existingPhone.id !== userId) {
+        throw new ConflictException(UserErrors.PHONE_ALREADY_EXISTS);
+      }
+    }
 
     const updated = await this.prisma.user.update({
       where: { id: userId },

@@ -69,6 +69,8 @@ export const AuthErrors = {
 
 export const UserErrors = {
   USER_NOT_FOUND: 'user.error.user_not_found',
+  EMAIL_ALREADY_EXISTS: 'user.error.email_already_exists',
+  PHONE_ALREADY_EXISTS: 'user.error.phone_already_exists',
   PROFILE_UPDATE_FAILED: 'user.error.profile_update_failed',
   AVATAR_UPLOAD_FAILED: 'user.error.avatar_upload_failed',
   INVALID_PASSWORD: 'user.error.invalid_password',
