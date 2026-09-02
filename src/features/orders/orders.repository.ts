@@ -124,6 +124,15 @@ export class OrdersRepository {
       include: ORDER_INCLUDE,
     });
     if (!order) throw new NotFoundException(OrderErrors.NOT_FOUND);
+
+    const locations = await this.prisma.$queryRaw<Array<{lng: number, lat: number}>>`
+      SELECT ST_X("deliveryLocation"::geometry) AS lng, ST_Y("deliveryLocation"::geometry) AS lat
+      FROM orders WHERE id = ${orderId}
+    `;
+    if (locations.length > 0 && locations[0].lng !== null) {
+      (order as any).deliveryLocation = [locations[0].lng, locations[0].lat];
+    }
+
     return order;
   }
 
@@ -168,6 +177,20 @@ export class OrdersRepository {
       }),
       this.prisma.order.count({ where }),
     ]);
+
+    if (orders.length > 0) {
+      const orderIds = orders.map(o => o.id);
+      const locations = await this.prisma.$queryRaw<Array<{id: string, lng: number, lat: number}>>`
+        SELECT id, ST_X("deliveryLocation"::geometry) AS lng, ST_Y("deliveryLocation"::geometry) AS lat
+        FROM orders WHERE id IN (${Prisma.join(orderIds)})
+      `;
+      for (const order of orders) {
+        const loc = locations.find(l => l.id === order.id);
+        if (loc && loc.lng !== null && loc.lat !== null) {
+          (order as any).deliveryLocation = [loc.lng, loc.lat];
+        }
+      }
+    }
 
     return { orders, total, page, limit, totalPages: Math.ceil(total / limit) };
   }

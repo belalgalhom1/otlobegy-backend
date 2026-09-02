@@ -450,6 +450,10 @@ private async applyStatusTransition(
       oldStatus,
     );
 
+    if (order.driverId && newStatus === OrderStatus.DELIVERED) {
+      await this.ordersRepository.freeDriver(order.driverId);
+    }
+
     const vendorUserIds = await this.ordersRepository.getVendorUserIds(
       order.vendorId,
     );
