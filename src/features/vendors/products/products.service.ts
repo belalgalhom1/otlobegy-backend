@@ -4,6 +4,7 @@ import {
   BadRequestException,
   Logger,
   ConflictException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { StorageService } from '../../../infrastructure/storage/storage.service';
@@ -69,13 +70,29 @@ const PRODUCT_LIST_INCLUDE = {
 };
 
 @Injectable()
-export class ProductsService {
+export class ProductsService implements OnModuleInit {
   private readonly logger = new Logger(ProductsService.name);
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
   ) {}
+
+  async onModuleInit() {
+    // Sanitize any existing empty string SKUs to NULL so they do not collide with unique constraints
+    try {
+      await this.prisma.product.updateMany({
+        where: { sku: '' },
+        data: { sku: null },
+      });
+      await this.prisma.productVariant.updateMany({
+        where: { sku: '' },
+        data: { sku: null },
+      });
+    } catch (err) {
+      this.logger.warn(`Failed to sanitize empty string SKUs on startup: ${err}`);
+    }
+  }
 
   // ─── List products ────────────────────────────────────────────────────────
 
@@ -154,8 +171,9 @@ export class ProductsService {
       await this.assertCategoryBelongsToVendor(dto.categoryId, vendorId);
     }
 
-    if (dto.sku) {
-      await this.assertSkuAvailable(dto.sku);
+    const sku = dto.sku?.trim() ? dto.sku.trim() : null;
+    if (sku) {
+      await this.assertSkuAvailable(sku);
     }
 
     const product = await this.prisma.$transaction(async (tx) => {
@@ -170,7 +188,7 @@ export class ProductsService {
           hasVariants: dto.hasVariants ?? false,
           basePrice: dto.basePrice ?? null,
           comparePrice: dto.comparePrice ?? null,
-          sku: dto.sku ?? null,
+          sku,
           stock: dto.stock ?? null,
           isActive: dto.isActive ?? true,
           isFeatured: dto.isFeatured ?? false,
@@ -211,8 +229,15 @@ export class ProductsService {
       await this.assertCategoryBelongsToVendor(dto.categoryId, vendorId);
     }
 
-    if (dto.sku) {
-      await this.assertSkuAvailable(dto.sku, productId);
+    const sku =
+      dto.sku !== undefined
+        ? dto.sku?.trim()
+          ? dto.sku.trim()
+          : null
+        : undefined;
+
+    if (sku) {
+      await this.assertSkuAvailable(sku, productId);
     }
 
     try {
@@ -235,7 +260,7 @@ export class ProductsService {
           ...(dto.comparePrice !== undefined && {
             comparePrice: dto.comparePrice,
           }),
-          ...(dto.sku !== undefined && { sku: dto.sku }),
+          ...(sku !== undefined && { sku }),
           ...(dto.stock !== undefined && { stock: dto.stock }),
           ...(dto.isActive !== undefined && { isActive: dto.isActive }),
           ...(dto.isFeatured !== undefined && { isFeatured: dto.isFeatured }),
@@ -296,13 +321,17 @@ export class ProductsService {
   async remove(vendorId: string, productId: string) {
     const exists = await this.prisma.product.findFirst({
       where: { id: productId, vendorId, deletedAt: null },
-      select: { id: true },
+      select: { id: true, sku: true },
     });
     if (!exists) throw new NotFoundException(ProductErrors.NOT_FOUND);
 
     await this.prisma.product.update({
       where: { id: productId },
-      data: { deletedAt: new Date(), isActive: false },
+      data: {
+        deletedAt: new Date(),
+        isActive: false,
+        sku: exists.sku ? `${exists.sku}#deleted#${Date.now()}` : null,
+      },
     });
 
     this.logger.log(`Product soft-deleted: ${productId}`);
@@ -328,8 +357,9 @@ export class ProductsService {
       });
     }
 
-    if (dto.sku) {
-      await this.assertVariantSkuAvailable(dto.sku);
+    const sku = dto.sku?.trim() ? dto.sku.trim() : null;
+    if (sku) {
+      await this.assertVariantSkuAvailable(sku);
     }
 
     const variant = await this.prisma.$transaction(async (tx) => {
@@ -338,7 +368,7 @@ export class ProductsService {
           productId,
           name: dto.name,
           nameAr: dto.nameAr ?? null,
-          sku: dto.sku ?? null,
+          sku,
           basePrice: dto.basePrice,
           comparePrice: dto.comparePrice ?? null,
           stock: dto.stock ?? null,
@@ -365,8 +395,15 @@ export class ProductsService {
   ) {
     await this.assertVariantBelongsToProduct(variantId, productId, vendorId);
 
-    if (dto.sku) {
-      await this.assertVariantSkuAvailable(dto.sku, variantId);
+    const sku =
+      dto.sku !== undefined
+        ? dto.sku?.trim()
+          ? dto.sku.trim()
+          : null
+        : undefined;
+
+    if (sku) {
+      await this.assertVariantSkuAvailable(sku, variantId);
     }
 
     try {
@@ -378,7 +415,7 @@ export class ProductsService {
         data: {
           ...(dto.name !== undefined && { name: dto.name }),
           ...(dto.nameAr !== undefined && { nameAr: dto.nameAr }),
-          ...(dto.sku !== undefined && { sku: dto.sku }),
+          ...(sku !== undefined && { sku }),
           ...(dto.basePrice !== undefined && { basePrice: dto.basePrice }),
           ...(dto.comparePrice !== undefined && {
             comparePrice: dto.comparePrice,
@@ -590,8 +627,9 @@ export class ProductsService {
     productId: string,
     dto: CreateProductVariantDto,
   ) {
-    if (dto.sku) {
-      await this.assertVariantSkuAvailable(dto.sku);
+    const sku = dto.sku?.trim() ? dto.sku.trim() : null;
+    if (sku) {
+      await this.assertVariantSkuAvailable(sku);
     }
 
     const variant = await tx.productVariant.create({
@@ -599,7 +637,7 @@ export class ProductsService {
         productId,
         name: dto.name,
         nameAr: dto.nameAr ?? null,
-        sku: dto.sku ?? null,
+        sku,
         basePrice: dto.basePrice,
         comparePrice: dto.comparePrice ?? null,
         stock: dto.stock ?? null,
@@ -633,7 +671,7 @@ export class ProductsService {
 
   private async assertSkuAvailable(sku: string, excludeId?: string) {
     const existing = await this.prisma.product.findFirst({
-      where: { sku, deletedAt: null },
+      where: { sku },
       select: { id: true },
     });
     if (existing && existing.id !== excludeId) {
