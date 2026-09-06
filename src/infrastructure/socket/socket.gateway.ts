@@ -16,6 +16,8 @@ import { SocketAuthService } from './socket-auth.service';
 @WebSocketGateway({
   namespace: 'events',
   cors: { origin: '*' },
+  pingInterval: 10000,
+  pingTimeout: 5000,
 })
 export class SocketGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
