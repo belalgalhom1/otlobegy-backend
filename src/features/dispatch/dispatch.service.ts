@@ -217,6 +217,15 @@ export class DispatchService {
     );
 
     for (const candidate of candidates) {
+      await this.redis.sadd(
+        `otlobegy:driver-pending-dispatches:${candidate.driverId}`,
+        dispatchId,
+      );
+      await this.redis.expire(
+        `otlobegy:driver-pending-dispatches:${candidate.driverId}`,
+        redisTtl,
+      );
+
       this.eventEmitter.emit(
         EVENTS.ORDER_DISPATCH_SENT,
         new OrderDispatchSentEvent(
@@ -272,6 +281,13 @@ export class DispatchService {
     // Persist terminal state to Postgres for anyone who didn't reject
     const dispatchData = JSON.parse(active);
     const candidates = dispatchData.candidates || [];
+
+    for (const candidate of candidates) {
+      await this.redis.srem(
+        `otlobegy:driver-pending-dispatches:${candidate.driverId}`,
+        dispatchId,
+      );
+    }
 
     const unresponded = candidates.filter(
       (c: any) => !rejectedBy.includes(c.driverId),
@@ -424,6 +440,10 @@ export class DispatchService {
     const requiresCustomerApproval = (settings as any).requireCustomerApproval ?? true;
     const nextStatus = requiresCustomerApproval ? OrderStatus.PENDING_CUSTOMER_APPROVAL : (order.paymentMethod === 'MOBILE_WALLET' ? OrderStatus.PENDING_PAYMENT : OrderStatus.DRIVER_ASSIGNED);
 
+    const losingCandidates = (dispatchData.candidates || []).filter(
+      (c: any) => c.driverId !== driverId && !rejectedBy.includes(c.driverId),
+    );
+
     await this.prisma.$transaction(async (tx) => {
       // 1. Create the permanent accepted record
       await tx.orderDispatch.create({
@@ -474,10 +494,6 @@ export class DispatchService {
       });
 
       // 3. Log CANCELLED for the remaining "losing" candidates
-      const losingCandidates = (dispatchData.candidates || []).filter(
-        (c: any) => c.driverId !== driverId && !rejectedBy.includes(c.driverId),
-      );
-
       if (losingCandidates.length > 0) {
         await tx.orderDispatch.createMany({
           data: losingCandidates.map((c: any) => ({
@@ -500,9 +516,28 @@ export class DispatchService {
     await this.redis.del(`otlobegy:order-dispatch-active:${orderId}`);
     await this.redis.del(rejectedKey);
 
+    for (const c of dispatchData.candidates || []) {
+      await this.redis.srem(
+        `otlobegy:driver-pending-dispatches:${c.driverId}`,
+        dispatchId,
+      );
+    }
+
     this.logger.log(
       `Driver ${driverId} accepted dispatch ${dispatchId} for order ${order.orderNumber}`,
     );
+
+    // Notify unresponded losing drivers that dispatch has ended
+    for (const c of losingCandidates) {
+      this.eventEmitter.emit(
+        EVENTS.ORDER_DISPATCH_CANCELLED,
+        new OrderDispatchCancelledEvent(
+          dispatchId,
+          orderId,
+          c.userId,
+        ),
+      );
+    }
 
     const members = order.vendorId
       ? await this.prisma.vendorMember.findMany({ where: { vendorId: order.vendorId }, select: { userId: true } })
@@ -568,6 +603,12 @@ export class DispatchService {
     const added = await this.redis.sadd(rejectedKey, driverId);
     if (added === 0) return; // Already rejected
 
+    // Remove from driver's pending dispatches set
+    await this.redis.srem(
+      `otlobegy:driver-pending-dispatches:${driverId}`,
+      dispatchId,
+    );
+
     // Set TTL for the rejected set to automatically cleanup
     const ttl = Math.max(1, Math.floor((new Date(dispatchData.expiresAt).getTime() - Date.now()) / 1000) + 60);
     await this.redis.expire(rejectedKey, ttl);
@@ -605,6 +646,13 @@ export class DispatchService {
       await this.redis.del(`otlobegy:dispatch:${dispatchId}`);
       await this.redis.del(`otlobegy:order-dispatch-active:${orderId}`);
       await this.redis.del(rejectedKey);
+
+      for (const c of dispatchData.candidates || []) {
+        await this.redis.srem(
+          `otlobegy:driver-pending-dispatches:${c.driverId}`,
+          dispatchId,
+        );
+      }
 
       const expiryJob = await this.dispatchQueue.getJob(
         `dispatch-expire-${dispatchId}`,
@@ -673,7 +721,56 @@ export class DispatchService {
     });
     if (!driver) return [];
 
-    const activeDispatches = await this.prisma.orderDispatch.findMany({
+    const dispatchIds: string[] = await this.redis.smembers(
+      `otlobegy:driver-pending-dispatches:${driver.id}`,
+    );
+
+    const pendingDispatches: any[] = [];
+
+    for (const dispatchId of dispatchIds) {
+      const raw = await this.redis.get(`otlobegy:dispatch:${dispatchId}`);
+      if (!raw) {
+        await this.redis.srem(`otlobegy:driver-pending-dispatches:${driver.id}`, dispatchId);
+        continue;
+      }
+
+      const dispatchData = JSON.parse(raw);
+      if (Date.now() > new Date(dispatchData.expiresAt).getTime()) {
+        await this.redis.srem(`otlobegy:driver-pending-dispatches:${driver.id}`, dispatchId);
+        continue;
+      }
+
+      const rejectedBy = await this.redis.smembers(`otlobegy:dispatch:${dispatchId}:rejected`);
+      if (rejectedBy.includes(driver.id)) {
+        await this.redis.srem(`otlobegy:driver-pending-dispatches:${driver.id}`, dispatchId);
+        continue;
+      }
+
+      const candidate = (dispatchData.candidates || []).find((c: any) => c.driverId === driver.id);
+      if (!candidate) {
+        await this.redis.srem(`otlobegy:driver-pending-dispatches:${driver.id}`, dispatchId);
+        continue;
+      }
+
+      pendingDispatches.push({
+        id: dispatchId,
+        dispatchId,
+        orderId: dispatchData.orderId,
+        type: dispatchData.type,
+        estimatedEarnings: candidate.estimatedEarnings,
+        distanceKm: candidate.distanceKm,
+        expiresAt: dispatchData.expiresAt,
+        pickupLocationName: candidate.pickupLocationName ?? dispatchData.pickupLocationName,
+        dropoffLocationName: candidate.dropoffLocationName ?? dispatchData.dropoffLocationName,
+      });
+    }
+
+    if (pendingDispatches.length > 0) {
+      return pendingDispatches;
+    }
+
+    // Fallback to PostgreSQL if any pending exist
+    return this.prisma.orderDispatch.findMany({
       where: {
         driverId: driver.id,
         status: 'PENDING',
@@ -683,8 +780,6 @@ export class DispatchService {
         order: true,
       },
     });
-
-    return activeDispatches;
   }
 
   // ─── Cancel active dispatch (e.g. order cancelled) ────────────────────────
@@ -706,6 +801,13 @@ export class DispatchService {
     const rejectedKey = `otlobegy:dispatch:${dispatchId}:rejected`;
     const rejectedBy: string[] = await this.redis.smembers(rejectedKey);
     await this.redis.del(rejectedKey);
+
+    for (const c of dispatchData.candidates || []) {
+      await this.redis.srem(
+        `otlobegy:driver-pending-dispatches:${c.driverId}`,
+        dispatchId,
+      );
+    }
 
     // Persist terminal state to Postgres
     const candidates = dispatchData.candidates || [];
