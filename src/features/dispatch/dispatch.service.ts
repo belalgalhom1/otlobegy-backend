@@ -34,7 +34,7 @@ export class DispatchService {
     private readonly locationRepository: LocationRepository,
     @InjectQueue(QUEUES.DISPATCH) private readonly dispatchQueue: Queue,
     @InjectQueue(QUEUES.ORDERS) private readonly ordersQueue: Queue,
-  ) {}
+  ) { }
 
   // ─── Core dispatch logic ──────────────────────────────────────────────────
 
@@ -43,10 +43,10 @@ export class DispatchService {
 
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
-      select: { 
-        id: true, 
-        status: true, 
-        vendorId: true, 
+      select: {
+        id: true,
+        status: true,
+        vendorId: true,
         type: true,
         deliveryFee: true,
         customer: { select: { user: { select: { name: true } } } },
@@ -93,7 +93,7 @@ export class DispatchService {
     let allowedVehicleTypes: string[] = [];
     if (dispatchContext.requestedVehicleType) {
       const v = dispatchContext.requestedVehicleType;
-      const isAllowed = 
+      const isAllowed =
         (v === 'BICYCLE' && settings.allowBicycle) ||
         (v === 'MOTORCYCLE' && settings.allowMotorcycle) ||
         (v === 'CAR' && settings.allowCar) ||
@@ -156,7 +156,7 @@ export class DispatchService {
           perKmOverride,
           settings,
         );
-        
+
         const pickupLocationName = order.vendor?.storeName ?? order.vendor?.storeNameAr ?? 'Vendor';
         const dropoffLocationName = order.customer?.user?.name ?? 'Customer';
 
@@ -237,7 +237,7 @@ export class DispatchService {
 
     this.logger.log(
       `Broadcast sent to ${candidates.length} drivers for order ${orderNumber} ` +
-        `(radius: ${radiusKm}km, attempt ${attempt})`,
+      `(radius: ${radiusKm}km, attempt ${attempt})`,
     );
 
     return true;
@@ -341,7 +341,7 @@ export class DispatchService {
     }
 
     const dispatchData = JSON.parse(raw);
-    
+
     // Strict timestamp validation since Redis TTL outlives the dispatch window
     if (Date.now() > new Date(dispatchData.expiresAt).getTime()) {
       this.logger.warn(
@@ -440,9 +440,9 @@ export class DispatchService {
         },
       });
 
-      
 
-            // 2. Assign the order safely to prevent race conditions
+
+      // 2. Assign the order safely to prevent race conditions
       const updated = await tx.order.updateMany({
         where: { id: order.id, status: OrderStatus.LOOKING_FOR_DRIVER },
         data: {
@@ -504,11 +504,11 @@ export class DispatchService {
       `Driver ${driverId} accepted dispatch ${dispatchId} for order ${order.orderNumber}`,
     );
 
-    const members = order.vendorId 
+    const members = order.vendorId
       ? await this.prisma.vendorMember.findMany({ where: { vendorId: order.vendorId }, select: { userId: true } })
       : [];
     const vendorUserIds = members.map(m => m.userId);
-    
+
 
     this.eventEmitter.emit(
       EVENTS.ORDER_STATUS_CHANGED,
@@ -524,8 +524,8 @@ export class DispatchService {
         driverId,
         candidate.userId,
         candidate.userId,
-        requiresCustomerApproval 
-          ? 'Driver found. Please approve final fee.' 
+        requiresCustomerApproval
+          ? 'Driver found. Please approve final fee.'
           : 'Driver found and auto-assigned.',
       ),
     );
@@ -567,7 +567,7 @@ export class DispatchService {
     const rejectedKey = `otlobegy:dispatch:${dispatchId}:rejected`;
     const added = await this.redis.sadd(rejectedKey, driverId);
     if (added === 0) return; // Already rejected
-    
+
     // Set TTL for the rejected set to automatically cleanup
     const ttl = Math.max(1, Math.floor((new Date(dispatchData.expiresAt).getTime() - Date.now()) / 1000) + 60);
     await this.redis.expire(rejectedKey, ttl);
@@ -609,7 +609,7 @@ export class DispatchService {
       const expiryJob = await this.dispatchQueue.getJob(
         `dispatch-expire-${dispatchId}`,
       );
-      
+
       const rejectedList = await this.redis.smembers(rejectedKey);
 
       if (expiryJob) {

@@ -60,11 +60,26 @@ export class LocationRepository {
    * Process user disconnect to clean up location pool
    */
   async handleUserDisconnect(userId: string): Promise<void> {
-    const driverId = await this.redis.get(`otlobegy:user-driver-map:${userId}`);
-    if (driverId) {
-      await this.removeDriverLocation(driverId);
-      this.logger.debug(`Removed driver ${driverId} from active location pool due to disconnect`);
+    const driver = await this.prisma.driver.findUnique({
+      where: { userId },
+      select: { id: true, status: true },
+    });
+    if (!driver) return;
+
+    // If driver is currently ONLINE or ON_DELIVERY, do NOT evict from active location pool on transient socket drops.
+    // They continue to receive dispatches via FCM background push & HTTP fallback.
+    // Drivers are explicitly removed from the pool when they switch status to OFFLINE.
+    if (driver.status === 'ONLINE' || driver.status === 'ON_DELIVERY') {
+      this.logger.debug(
+        `Driver ${driver.id} socket disconnected, but driver is ${driver.status}. Preserving location in active pool.`,
+      );
+      return;
     }
+
+    await this.removeDriverLocation(driver.id);
+    this.logger.debug(
+      `Removed driver ${driver.id} (${driver.status}) from active location pool due to disconnect`,
+    );
   }
 
   /**

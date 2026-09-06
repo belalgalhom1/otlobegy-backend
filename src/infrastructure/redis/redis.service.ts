@@ -210,4 +210,23 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       return [];
     }
   }
+
+  async srem(key: string, ...members: string[]): Promise<number> {
+    try {
+      return await this.client.srem(key, ...members);
+    } catch (error) {
+      this.logger.error(`Failed to SREM from key "${key}"`, (error as Error).stack);
+      return 0;
+    }
+  }
+
+  async sismember(key: string, member: string): Promise<boolean> {
+    try {
+      const res = await this.client.sismember(key, member);
+      return res === 1;
+    } catch (error) {
+      this.logger.error(`Failed to SISMEMBER key "${key}"`, (error as Error).stack);
+      return false;
+    }
+  }
 }
