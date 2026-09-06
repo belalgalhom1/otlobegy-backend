@@ -114,30 +114,32 @@ export class VendorsService {
     let vendors: any[] = [];
     let total = 0;
 
-    if (dto.lat !== undefined && dto.lng !== undefined && !dto.sortBy) {
-      // 1. Resolve containing delivery zone, fallback to closest active zone
-      let targetZoneId: string | null = null;
-      try {
-        const containingZoneRows = await this.prisma.$queryRaw<{ id: string }[]>`
-          SELECT id FROM zones
-          WHERE ST_Contains(boundary, ST_SetSRID(ST_MakePoint(${dto.lng}, ${dto.lat}), 4326))
-            AND "isActive" = true
-          ORDER BY ST_Area(boundary) ASC
-          LIMIT 1
-        `;
-        targetZoneId = containingZoneRows[0]?.id ?? null;
-
-        if (!targetZoneId) {
-          const closestZoneRows = await this.prisma.$queryRaw<{ id: string }[]>`
+    if ((dto.lat !== undefined && dto.lng !== undefined && (!dto.sortBy || dto.sortBy === 'distance')) || dto.zoneId) {
+      // 1. Resolve target delivery zone (from dto.zoneId or containing/closest zone)
+      let targetZoneId: string | null = dto.zoneId ?? null;
+      if (!targetZoneId && dto.lat !== undefined && dto.lng !== undefined) {
+        try {
+          const containingZoneRows = await this.prisma.$queryRaw<{ id: string }[]>`
             SELECT id FROM zones
-            WHERE "isActive" = true
-            ORDER BY ST_Distance(boundary::geography, ST_SetSRID(ST_MakePoint(${dto.lng}, ${dto.lat}), 4326)::geography) ASC
+            WHERE ST_Contains(boundary, ST_SetSRID(ST_MakePoint(${dto.lng}, ${dto.lat}), 4326))
+              AND "isActive" = true
+            ORDER BY ST_Area(boundary) ASC
             LIMIT 1
           `;
-          targetZoneId = closestZoneRows[0]?.id ?? null;
+          targetZoneId = containingZoneRows[0]?.id ?? null;
+
+          if (!targetZoneId) {
+            const closestZoneRows = await this.prisma.$queryRaw<{ id: string }[]>`
+              SELECT id FROM zones
+              WHERE "isActive" = true
+              ORDER BY ST_Distance(boundary::geography, ST_SetSRID(ST_MakePoint(${dto.lng}, ${dto.lat}), 4326)::geography) ASC
+              LIMIT 1
+            `;
+            targetZoneId = closestZoneRows[0]?.id ?? null;
+          }
+        } catch (err) {
+          this.logger.warn(`Zone resolution failed: ${err}`);
         }
-      } catch (err) {
-        this.logger.warn(`Zone resolution failed: ${err}`);
       }
 
       // 2. Fetch best branch per vendor ranked by: inZone -> isOpen -> geodesic distance
@@ -154,6 +156,7 @@ export class VendorsService {
       };
 
       let nearestBranches: NearestBranchRow[] = [];
+      const hasCoords = dto.lat !== undefined && dto.lng !== undefined;
       try {
         nearestBranches = await this.prisma.$queryRaw<NearestBranchRow[]>`
           WITH ranked_branches AS (
@@ -166,13 +169,13 @@ export class VendorsService {
               vb."isOpen" AS "branchIsOpen",
               vb."zoneId" AS "branchZoneId",
               ${targetZoneId ? Prisma.sql`(vb."zoneId" = ${targetZoneId})` : Prisma.sql`false`} AS "inZone",
-              ROUND((ST_Distance(vb.location::geography, ST_SetSRID(ST_MakePoint(${dto.lng}, ${dto.lat}), 4326)::geography) / 1000.0)::numeric, 1)::float AS "distanceKm",
+              ${hasCoords ? Prisma.sql`ROUND((ST_Distance(vb.location::geography, ST_SetSRID(ST_MakePoint(${dto.lng}, ${dto.lat}), 4326)::geography) / 1000.0)::numeric, 1)::float` : Prisma.sql`0.0::float`} AS "distanceKm",
               ROW_NUMBER() OVER (
                 PARTITION BY vb."vendorId"
                 ORDER BY
                   (CASE WHEN ${targetZoneId ? Prisma.sql`vb."zoneId" = ${targetZoneId}` : Prisma.sql`false`} THEN 0 ELSE 1 END) ASC,
                   (CASE WHEN vb."isOpen" = true THEN 0 ELSE 1 END) ASC,
-                  ST_Distance(vb.location::geography, ST_SetSRID(ST_MakePoint(${dto.lng}, ${dto.lat}), 4326)::geography) ASC
+                  ${hasCoords ? Prisma.sql`ST_Distance(vb.location::geography, ST_SetSRID(ST_MakePoint(${dto.lng}, ${dto.lat}), 4326)::geography) ASC` : Prisma.sql`vb.id ASC`}
               ) AS rank
             FROM vendor_branches vb
             JOIN vendors v ON v.id = vb."vendorId"

@@ -204,7 +204,7 @@ export class QueryVendorsDto {
   @Max(5)
   minRating?: number;
 
-  @ApiProperty({ example: 'rating', required: false, enum: ['rating', 'createdAt'] })
+  @ApiProperty({ example: 'rating', required: false, enum: ['rating', 'createdAt', 'distance'] })
   @IsOptional()
   @IsString()
   sortBy?: string;
@@ -213,6 +213,11 @@ export class QueryVendorsDto {
   @IsOptional()
   @IsString()
   sortOrder?: 'asc' | 'desc';
+
+  @ApiProperty({ example: 'zone-uuid-123', required: false, description: 'Filter or prioritize vendors by delivery zone ID' })
+  @IsOptional()
+  @IsString()
+  zoneId?: string;
 
   @ApiProperty({ example: 30.0444, required: false })
   @IsOptional()
