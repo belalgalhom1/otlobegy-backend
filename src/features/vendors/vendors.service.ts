@@ -511,9 +511,27 @@ export class VendorsService {
       products: {
         where: { isActive: true, deletedAt: null },
         include: {
-          variants: true,
+          variants: {
+            where: { isActive: true },
+            include: {
+              optionGroups: {
+                include: {
+                  options: {
+                    where: { isActive: true },
+                    orderBy: { name: Prisma.SortOrder.asc },
+                  },
+                },
+              },
+            },
+            orderBy: { name: Prisma.SortOrder.asc },
+          },
           optionGroups: {
-            include: { options: true },
+            include: {
+              options: {
+                where: { isActive: true },
+                orderBy: { name: Prisma.SortOrder.asc },
+              },
+            },
           },
         },
       },
