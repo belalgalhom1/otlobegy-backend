@@ -155,8 +155,7 @@ export class StatisticsService {
     });
 
     const isNegativeBalance = (driverSnapshot?.walletBalance ?? 0) < -((settings as any).maxNegativeDriverBalance ?? 500);
-    const isCashLock = isDriverCollected && !isContracted;
-    const shouldLock = isCashLock || isNegativeBalance;
+    const shouldLock = isNegativeBalance;
 
     const driver = await this.prisma.driver.update({
       where: { id: driverId },

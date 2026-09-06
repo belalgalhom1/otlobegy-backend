@@ -172,9 +172,7 @@ async placeOrder(actor: JwtAccessPayload, dto: PlaceOrderDto) {
       settings.highValueOrderThreshold > 0 &&
       grandTotal >= settings.highValueOrderThreshold
     ) {
-      upfrontAmount = Math.ceil(
-        grandTotal * (Number(settings.highValueUpfrontRate) / 100),
-      );
+      upfrontAmount = 0;
     }
 
     type CartItemPayload = {
@@ -753,7 +751,7 @@ async adminPlaceDirectOrder(
       grandTotal,
       upfrontAmount: 0,
       specialRequest: dto.specialRequest ?? null,
-      type: 'DELIVERY',
+      type: 'STANDARD',
       distanceKm: 0,
       pickupAddress: null,
       pickupLng: null,
@@ -839,10 +837,14 @@ async acceptOrderChanges(actor: JwtAccessPayload, orderId: string) {
     if (order.status !== OrderStatus.CHANGES_REQUESTED)
       throw new BadRequestException(OrderErrors.NO_PENDING_CHANGES);
 
-    const nextStatus =
-      order.paymentMethod === 'MOBILE_WALLET'
-        ? OrderStatus.PENDING_PAYMENT
-        : OrderStatus.DRIVER_ASSIGNED;
+    const hasDriver = !!order.driverId;
+    let nextStatus = OrderStatus.ACCEPTED;
+    if (hasDriver) {
+      nextStatus =
+        order.paymentMethod === 'MOBILE_WALLET'
+          ? OrderStatus.PENDING_PAYMENT
+          : OrderStatus.DRIVER_ASSIGNED;
+    }
 
     const updated = await this.ordersRepository.updateStatus(
       orderId,

@@ -673,11 +673,18 @@ export class DispatchService {
     });
     if (!driver) return [];
 
-    // Instead of querying Postgres for PENDING, drivers shouldn't poll for this,
-    // they should get real-time WS events. If we MUST support polling, we could
-    // iterate through all `otlobegy:dispatch:*` keys but that's slow.
-    // For now, return empty array since we rely on push/WS.
-    return [];
+    const activeDispatches = await this.prisma.orderDispatch.findMany({
+      where: {
+        driverId: driver.id,
+        status: 'PENDING',
+        expiresAt: { gt: new Date() },
+      },
+      include: {
+        order: true,
+      },
+    });
+
+    return activeDispatches;
   }
 
   // ─── Cancel active dispatch (e.g. order cancelled) ────────────────────────

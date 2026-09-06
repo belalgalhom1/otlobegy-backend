@@ -83,7 +83,7 @@ const DRIVER_ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
     OrderStatus.PICKED_UP,
   ],
   [OrderStatus.READY_FOR_PICKUP]: [OrderStatus.PICKED_UP],
-  [OrderStatus.PICKED_UP]: [OrderStatus.DELIVERED],
+  [OrderStatus.PICKED_UP]: [OrderStatus.DELIVERED, OrderStatus.PENDING_PAYMENT],
   [OrderStatus.PENDING]: [],
   [OrderStatus.PENDING_CUSTOMER_APPROVAL]: [],
   [OrderStatus.CHANGES_REQUESTED]: [],
