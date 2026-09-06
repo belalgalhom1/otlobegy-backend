@@ -115,33 +115,132 @@ export class VendorsService {
     let total = 0;
 
     if (dto.lat !== undefined && dto.lng !== undefined && !dto.sortBy) {
-      const nearestBranches = await this.prisma.$queryRaw<{ vendorId: string }[]>`
-        SELECT "vendorId"
-        FROM "vendor_branches"
-        WHERE "isOpen" = true
-        ORDER BY location <-> ST_SetSRID(ST_MakePoint(${dto.lng}, ${dto.lat}), 4326) ASC
-        LIMIT 1000
-      `;
-      const vendorIdsSortedByDistance = Array.from(new Set(nearestBranches.map(b => b.vendorId)));
+      // 1. Resolve containing delivery zone, fallback to closest active zone
+      let targetZoneId: string | null = null;
+      try {
+        const containingZoneRows = await this.prisma.$queryRaw<{ id: string }[]>`
+          SELECT id FROM zones
+          WHERE ST_Contains(boundary, ST_SetSRID(ST_MakePoint(${dto.lng}, ${dto.lat}), 4326))
+            AND "isActive" = true
+          ORDER BY ST_Area(boundary) ASC
+          LIMIT 1
+        `;
+        targetZoneId = containingZoneRows[0]?.id ?? null;
 
-      if (vendorIdsSortedByDistance.length > 0) {
-        where.id = { in: vendorIdsSortedByDistance };
-        const matchingVendors = await this.prisma.vendor.findMany({
-          where,
-          include: this.vendorIncludes(),
-        });
-        
-        const vendorMap = new Map(matchingVendors.map(v => [v.id, v]));
-        const sortedMatchingVendors = vendorIdsSortedByDistance
-          .map(id => vendorMap.get(id))
-          .filter(v => v !== undefined);
-
-        total = sortedMatchingVendors.length;
-        vendors = sortedMatchingVendors.slice(skip, skip + limit);
-      } else {
-        total = 0;
-        vendors = [];
+        if (!targetZoneId) {
+          const closestZoneRows = await this.prisma.$queryRaw<{ id: string }[]>`
+            SELECT id FROM zones
+            WHERE "isActive" = true
+            ORDER BY ST_Distance(boundary::geography, ST_SetSRID(ST_MakePoint(${dto.lng}, ${dto.lat}), 4326)::geography) ASC
+            LIMIT 1
+          `;
+          targetZoneId = closestZoneRows[0]?.id ?? null;
+        }
+      } catch (err) {
+        this.logger.warn(`Zone resolution failed: ${err}`);
       }
+
+      // 2. Fetch best branch per vendor ranked by: inZone -> isOpen -> geodesic distance
+      type NearestBranchRow = {
+        vendorId: string;
+        branchId: string;
+        branchName: string;
+        branchNameAr: string | null;
+        branchAddress: string;
+        branchIsOpen: boolean;
+        branchZoneId: string;
+        inZone: boolean;
+        distanceKm: number;
+      };
+
+      let nearestBranches: NearestBranchRow[] = [];
+      try {
+        nearestBranches = await this.prisma.$queryRaw<NearestBranchRow[]>`
+          WITH ranked_branches AS (
+            SELECT
+              vb."vendorId",
+              vb.id AS "branchId",
+              vb.name AS "branchName",
+              vb."nameAr" AS "branchNameAr",
+              vb.address AS "branchAddress",
+              vb."isOpen" AS "branchIsOpen",
+              vb."zoneId" AS "branchZoneId",
+              ${targetZoneId ? Prisma.sql`(vb."zoneId" = ${targetZoneId})` : Prisma.sql`false`} AS "inZone",
+              ROUND((ST_Distance(vb.location::geography, ST_SetSRID(ST_MakePoint(${dto.lng}, ${dto.lat}), 4326)::geography) / 1000.0)::numeric, 1)::float AS "distanceKm",
+              ROW_NUMBER() OVER (
+                PARTITION BY vb."vendorId"
+                ORDER BY
+                  (CASE WHEN ${targetZoneId ? Prisma.sql`vb."zoneId" = ${targetZoneId}` : Prisma.sql`false`} THEN 0 ELSE 1 END) ASC,
+                  (CASE WHEN vb."isOpen" = true THEN 0 ELSE 1 END) ASC,
+                  ST_Distance(vb.location::geography, ST_SetSRID(ST_MakePoint(${dto.lng}, ${dto.lat}), 4326)::geography) ASC
+              ) AS rank
+            FROM vendor_branches vb
+            JOIN vendors v ON v.id = vb."vendorId"
+            WHERE v."deletedAt" IS NULL
+          )
+          SELECT
+            "vendorId",
+            "branchId",
+            "branchName",
+            "branchNameAr",
+            "branchAddress",
+            "branchIsOpen",
+            "branchZoneId",
+            "inZone",
+            "distanceKm"
+          FROM ranked_branches
+          WHERE rank = 1
+          ORDER BY
+            "inZone" DESC,
+            "branchIsOpen" DESC,
+            "distanceKm" ASC
+        `;
+      } catch (err) {
+        this.logger.warn(`Nearest branch query failed: ${err}`);
+      }
+
+      // Fetch all vendors matching where filter
+      const matchingVendors = await this.prisma.vendor.findMany({
+        where,
+        include: this.vendorIncludes(),
+      });
+
+      const vendorMap = new Map(matchingVendors.map((v) => [v.id, v]));
+
+      // Merge sorted branches with vendor data
+      const sortedVendorsWithBranches: any[] = [];
+      for (const branch of nearestBranches) {
+        const vendor = vendorMap.get(branch.vendorId);
+        if (vendor) {
+          sortedVendorsWithBranches.push({
+            ...vendor,
+            _proximity: {
+              distanceKm: branch.distanceKm,
+              inCustomerZone: branch.inZone,
+              closestBranch: {
+                id: branch.branchId,
+                name: branch.branchName,
+                nameAr: branch.branchNameAr,
+                address: branch.branchAddress,
+                isOpen: branch.branchIsOpen,
+                zoneId: branch.branchZoneId,
+                distanceKm: branch.distanceKm,
+              },
+            },
+          });
+          vendorMap.delete(branch.vendorId);
+        }
+      }
+
+      // Any remaining matching vendors without branches are appended at the end
+      const remainingVendorsWithoutBranches = Array.from(vendorMap.values());
+      const combinedSortedVendors = [
+        ...sortedVendorsWithBranches,
+        ...remainingVendorsWithoutBranches,
+      ];
+
+      total = combinedSortedVendors.length;
+      vendors = combinedSortedVendors.slice(skip, skip + limit);
     } else {
       const orderBy: Prisma.VendorOrderByWithRelationInput = {};
       if (dto.sortBy) {
@@ -373,6 +472,42 @@ export class VendorsService {
           ...this.mapVendorForApp(v),
           matchingProducts: [],
         });
+      }
+    }
+
+    if (dto.lat !== undefined && dto.lng !== undefined && vendorMap.size > 0) {
+      try {
+        const vendorIds = Array.from(vendorMap.keys());
+        const branchDistances = await this.prisma.$queryRaw<{ vendorId: string; distanceKm: number }[]>`
+          SELECT
+            vb."vendorId",
+            ROUND((MIN(ST_Distance(vb.location::geography, ST_SetSRID(ST_MakePoint(${dto.lng}, ${dto.lat}), 4326)::geography)) / 1000.0)::numeric, 1)::float AS "distanceKm"
+          FROM vendor_branches vb
+          WHERE vb."vendorId" IN (${Prisma.join(vendorIds)})
+          GROUP BY vb."vendorId"
+        `;
+        const distanceMap = new Map(branchDistances.map((b) => [b.vendorId, b.distanceKm]));
+        const sortedResults = Array.from(vendorMap.values())
+          .map((v) => {
+            const d = distanceMap.get(v.id);
+            if (d !== undefined) {
+              v.distanceKm = d;
+              const baseMin = Math.max(15, Math.round(15 + d * 2.5));
+              const baseMax = baseMin + 10;
+              v.deliveryTime = `${baseMin}-${baseMax} دقيقة`;
+              v.deliveryTimeEn = `${baseMin}-${baseMax} mins`;
+            }
+            return v;
+          })
+          .sort((a, b) => {
+            const da = a.distanceKm ?? 9999;
+            const db = b.distanceKm ?? 9999;
+            return da - db;
+          });
+
+        return { results: sortedResults };
+      } catch (err) {
+        this.logger.warn(`Discovery search proximity sorting failed: ${err}`);
       }
     }
 
@@ -634,6 +769,20 @@ export class VendorsService {
       }
     }
 
+    const proximity = (vendor as any)._proximity;
+    const distanceKm: number | null = proximity?.distanceKm ?? (vendor as any).distanceKm ?? null;
+    const inCustomerZone: boolean = proximity?.inCustomerZone ?? false;
+    const closestBranch = proximity?.closestBranch ?? null;
+
+    let deliveryTime = '20-30 دقيقة';
+    let deliveryTimeEn = '20-30 mins';
+    if (distanceKm !== null && distanceKm > 0) {
+      const baseMin = Math.max(15, Math.round(15 + distanceKm * 2.5));
+      const baseMax = baseMin + 10;
+      deliveryTime = `${baseMin}-${baseMax} دقيقة`;
+      deliveryTimeEn = `${baseMin}-${baseMax} mins`;
+    }
+
     // Map backend fields to what the app expects
     return {
       ...vendor,
@@ -647,8 +796,12 @@ export class VendorsService {
       vendorAr: vendor.descriptionAr || vendor.vertical?.nameAr || '',
       rating: vendor.rating ?? 0,
       ratingCount: vendor.ratingCount ?? 0,
-      deliveryTime: '20-30 دقيقة', // Mock
-      deliveryFee: '15 ج رسوم توصيل', // Mock
+      distanceKm,
+      inCustomerZone,
+      closestBranch,
+      deliveryTime,
+      deliveryTimeEn,
+      deliveryFee: '15 ج رسوم توصيل',
       image:
         vendor.coverImage ||
         vendor.logo ||
