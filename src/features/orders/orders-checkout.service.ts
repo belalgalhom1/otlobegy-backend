@@ -838,7 +838,7 @@ async acceptOrderChanges(actor: JwtAccessPayload, orderId: string) {
       throw new BadRequestException(OrderErrors.NO_PENDING_CHANGES);
 
     const hasDriver = !!order.driverId;
-    let nextStatus = OrderStatus.ACCEPTED;
+    let nextStatus: OrderStatus = OrderStatus.ACCEPTED;
     if (hasDriver) {
       nextStatus =
         order.paymentMethod === 'MOBILE_WALLET'
