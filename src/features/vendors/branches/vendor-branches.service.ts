@@ -91,22 +91,10 @@ export class VendorBranchesService {
     await this.assertVendorExists(vendorId);
 
     const [lat, lng] = dto.location;
-    let resolvedZoneId = dto.zoneId;
-
-    if (!resolvedZoneId) {
-      const zoneResult = await this.prisma.$queryRaw<any[]>`
-        SELECT id FROM zones
-        WHERE ST_Contains(boundary, ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326))
-        AND "isActive" = true
-        LIMIT 1
-      `;
-      if (!zoneResult.length) {
-        throw new BadRequestException(ZoneErrors.INVALID_LOCATION_FOR_ZONE);
-      }
-      resolvedZoneId = zoneResult[0].id;
-    } else {
-      await this.validateLocationInZone(resolvedZoneId, dto.location);
-    }
+    const resolvedZoneId = await this.resolveValidZoneForLocation(
+      dto.location,
+      dto.zoneId,
+    );
 
     const id = crypto.randomUUID();
 
@@ -141,23 +129,11 @@ export class VendorBranchesService {
     const finalLocation =
       dto.location !== undefined ? dto.location : branch.location?.coordinates;
 
-    if (dto.location && dto.zoneId === undefined) {
-      const [lat, lng] = dto.location;
-      const zoneResult = await this.prisma.$queryRaw<any[]>`
-        SELECT id FROM zones
-        WHERE ST_Contains(boundary, ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326))
-        AND "isActive" = true
-        LIMIT 1
-      `;
-      if (!zoneResult.length) {
-        throw new BadRequestException(ZoneErrors.INVALID_LOCATION_FOR_ZONE);
-      }
-      finalZoneId = zoneResult[0].id;
-    } else if (finalZoneId && finalLocation) {
-      // If either location or zone explicitly changed, validate it
-      if (dto.zoneId !== undefined || dto.location !== undefined) {
-        await this.validateLocationInZone(finalZoneId, finalLocation);
-      }
+    if (finalLocation && (dto.zoneId !== undefined || dto.location !== undefined)) {
+      finalZoneId = await this.resolveValidZoneForLocation(
+        finalLocation,
+        finalZoneId,
+      );
     }
 
     // Update location via raw SQL when provided; otherwise keep existing.
@@ -222,19 +198,48 @@ export class VendorBranchesService {
     if (!vendor) throw new NotFoundException(VendorErrors.NOT_FOUND);
   }
 
-  private async validateLocationInZone(
-    zoneId: string,
+  private async resolveValidZoneForLocation(
     location: [number, number],
-  ) {
+    requestedZoneId?: string,
+  ): Promise<string> {
     const [lat, lng] = location;
-    const result = await this.prisma.$queryRaw<any[]>`
+
+    // 1. If a specific zone was requested, check if it contains the location
+    if (requestedZoneId) {
+      const result = await this.prisma.$queryRaw<any[]>`
+        SELECT id FROM zones
+        WHERE id = ${requestedZoneId}
+        AND ST_Contains(boundary, ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326))
+        AND "isActive" = true
+        LIMIT 1
+      `;
+      if (result.length > 0) {
+        return requestedZoneId;
+      }
+      this.logger.warn(
+        `Requested zone ${requestedZoneId} does not contain location [${lat}, ${lng}]. Checking other active zones...`,
+      );
+    }
+
+    // 2. Auto-detect which active zone contains the location
+    const autoZone = await this.prisma.$queryRaw<any[]>`
       SELECT id FROM zones
-      WHERE id = ${zoneId}
-      AND ST_Contains(boundary, ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326))
+      WHERE ST_Contains(boundary, ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326))
+      AND "isActive" = true
+      ORDER BY ST_Area(boundary) ASC
       LIMIT 1
     `;
-    if (!result.length) {
+
+    if (!autoZone.length) {
       throw new BadRequestException(ZoneErrors.INVALID_LOCATION_FOR_ZONE);
     }
+
+    if (requestedZoneId && requestedZoneId !== autoZone[0].id) {
+      this.logger.log(
+        `Auto-reassigned branch from requested zone ${requestedZoneId} to containing zone ${autoZone[0].id}`,
+      );
+    }
+
+    return autoZone[0].id;
   }
 }
